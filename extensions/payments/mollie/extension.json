@@ -1,0 +1,31 @@
+{
+    "id": "mollie",
+    "name": "Mollie",
+    "version": "1.0.0",
+    "description": "Payment Extension for Mollie hosted checkout, webhooks, refunds, and status sync.",
+    "author": "Agovena",
+    "category": "payment_gateway",
+    "agovena": "^0.1",
+    "provider": "Agovena\\Extensions\\Mollie\\MollieServiceProvider",
+    "dependencies": [],
+    "settings": [
+        {
+            "key": "api_key",
+            "label": "mollie::messages.settings.api_key",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "mollie::messages.settings.api_key_help"
+        },
+        {
+            "key": "enabled_methods",
+            "label": "mollie::messages.settings.enabled_methods",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "mollie::messages.settings.enabled_methods_help"
+        }
+    ]
+}

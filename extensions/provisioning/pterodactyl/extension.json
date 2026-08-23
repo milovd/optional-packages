@@ -1,0 +1,68 @@
+{
+    "id": "pterodactyl",
+    "name": "Pterodactyl",
+    "version": "1.0.0",
+    "description": "Provisioning Extension for Pterodactyl panel servers.",
+    "author": "Agovena",
+    "category": "provisioning",
+    "agovena": "^0.1",
+    "provider": "Agovena\\Extensions\\Pterodactyl\\PterodactylServiceProvider",
+    "dependencies": [],
+    "module_dependencies": ["provisioning"],
+    "settings": [
+        {
+            "key": "panel_url",
+            "label": "pterodactyl::messages.settings.panel_url",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "pterodactyl::messages.settings.panel_url_help"
+        },
+        {
+            "key": "application_api_key",
+            "label": "pterodactyl::messages.settings.application_api_key",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "pterodactyl::messages.settings.application_api_key_help"
+        },
+        {
+            "key": "client_api_key",
+            "label": "pterodactyl::messages.settings.client_api_key",
+            "type": "string",
+            "secret": true,
+            "required": false,
+            "default": "",
+            "help": "pterodactyl::messages.settings.client_api_key_help"
+        },
+        {
+            "key": "user_id",
+            "label": "pterodactyl::messages.settings.user_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "pterodactyl::messages.settings.user_id_help"
+        },
+        {
+            "key": "verify_tls",
+            "label": "pterodactyl::messages.settings.verify_tls",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "pterodactyl::messages.settings.verify_tls_help"
+        },
+        {
+            "key": "timeout",
+            "label": "pterodactyl::messages.settings.timeout",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "15",
+            "help": "pterodactyl::messages.settings.timeout_help"
+        }
+    ]
+}

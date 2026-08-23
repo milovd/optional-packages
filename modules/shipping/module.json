@@ -1,0 +1,11 @@
+{
+    "id": "shipping",
+    "name": "Shipping",
+    "version": "1.0.0",
+    "description": "Shippable products, shipping methods/zones, and first-class Shipment fulfillment.",
+    "author": "Agovena",
+    "agovena": "^0.1",
+    "group": "commerce",
+  "provider": "Agovena\\Modules\\Shipping\\ShippingServiceProvider",
+    "dependencies": []
+}

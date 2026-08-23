@@ -1,0 +1,68 @@
+{
+    "id": "postnl",
+    "name": "PostNL",
+    "version": "1.0.0",
+    "description": "Shipping Extension for PostNL barcodes, labels, tracking, and optional live quotes.",
+    "author": "Agovena",
+    "category": "shipping",
+    "agovena": "^0.1",
+    "provider": "Agovena\\Extensions\\Postnl\\PostnlServiceProvider",
+    "dependencies": [],
+    "module_dependencies": ["shipping"],
+    "settings": [
+        {
+            "key": "api_key",
+            "label": "postnl::messages.settings.api_key",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "postnl::messages.settings.api_key_help"
+        },
+        {
+            "key": "customer_code",
+            "label": "postnl::messages.settings.customer_code",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "postnl::messages.settings.customer_code_help"
+        },
+        {
+            "key": "customer_number",
+            "label": "postnl::messages.settings.customer_number",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "postnl::messages.settings.customer_number_help"
+        },
+        {
+            "key": "collection_location",
+            "label": "postnl::messages.settings.collection_location",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "postnl::messages.settings.collection_location_help"
+        },
+        {
+            "key": "sandbox",
+            "label": "postnl::messages.settings.sandbox",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "postnl::messages.settings.sandbox_help"
+        },
+        {
+            "key": "default_product_code",
+            "label": "postnl::messages.settings.default_product_code",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "3085",
+            "help": "postnl::messages.settings.default_product_code_help"
+        }
+    ]
+}

@@ -1,0 +1,11 @@
+{
+    "id": "digital",
+    "name": "Downloads",
+    "version": "1.0.0",
+    "description": "Downloadable file assets and customer entitlements after payment.",
+    "author": "Agovena",
+    "agovena": "^0.1",
+    "group": "commerce",
+    "provider": "Agovena\\Modules\\Digital\\DigitalServiceProvider",
+    "dependencies": []
+}

@@ -1,0 +1,40 @@
+{
+    "id": "stripe",
+    "name": "Stripe",
+    "version": "1.0.0",
+    "description": "Payment Extension for Stripe Checkout, signed webhooks, refunds, and off-session charges.",
+    "author": "Agovena",
+    "category": "payment_gateway",
+    "agovena": "^0.1",
+    "provider": "Agovena\\Extensions\\Stripe\\StripeServiceProvider",
+    "dependencies": [],
+    "settings": [
+        {
+            "key": "secret_key",
+            "label": "stripe::messages.settings.secret_key",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "stripe::messages.settings.secret_key_help"
+        },
+        {
+            "key": "webhook_secret",
+            "label": "stripe::messages.settings.webhook_secret",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "stripe::messages.settings.webhook_secret_help"
+        },
+        {
+            "key": "enabled_methods",
+            "label": "stripe::messages.settings.enabled_methods",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "stripe::messages.settings.enabled_methods_help"
+        }
+    ]
+}
