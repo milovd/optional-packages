@@ -1,0 +1,49 @@
+{
+    "id": "paypal",
+    "name": "PayPal",
+    "version": "1.0.0",
+    "description": "Payment Extension for PayPal Checkout Orders, signed webhooks, refunds, and status sync.",
+    "author": "Agovena",
+    "category": "payment_gateway",
+    "agovena": "^0.1",
+    "provider": "Agovena\\Extensions\\PayPal\\PayPalServiceProvider",
+    "dependencies": [],
+    "settings": [
+        {
+            "key": "client_id",
+            "label": "paypal::messages.settings.client_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "paypal::messages.settings.client_id_help"
+        },
+        {
+            "key": "client_secret",
+            "label": "paypal::messages.settings.client_secret",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "paypal::messages.settings.client_secret_help"
+        },
+        {
+            "key": "webhook_id",
+            "label": "paypal::messages.settings.webhook_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "paypal::messages.settings.webhook_id_help"
+        },
+        {
+            "key": "sandbox",
+            "label": "paypal::messages.settings.sandbox",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "paypal::messages.settings.sandbox_help"
+        }
+    ]
+}

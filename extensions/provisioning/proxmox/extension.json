@@ -1,0 +1,86 @@
+{
+    "id": "proxmox",
+    "name": "Proxmox VE",
+    "version": "1.0.0",
+    "description": "Provisioning Extension for Proxmox VE virtual machines (clone, lifecycle, sync).",
+    "author": "Agovena",
+    "category": "provisioning",
+    "agovena": "^0.1",
+    "provider": "Agovena\\Extensions\\Proxmox\\ProxmoxServiceProvider",
+    "dependencies": [],
+    "module_dependencies": ["provisioning"],
+    "settings": [
+        {
+            "key": "api_url",
+            "label": "proxmox::messages.settings.api_url",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "proxmox::messages.settings.api_url_help"
+        },
+        {
+            "key": "token_user",
+            "label": "proxmox::messages.settings.token_user",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "proxmox::messages.settings.token_user_help"
+        },
+        {
+            "key": "token_id",
+            "label": "proxmox::messages.settings.token_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "proxmox::messages.settings.token_id_help"
+        },
+        {
+            "key": "token_secret",
+            "label": "proxmox::messages.settings.token_secret",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "proxmox::messages.settings.token_secret_help"
+        },
+        {
+            "key": "node",
+            "label": "proxmox::messages.settings.node",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "proxmox::messages.settings.node_help"
+        },
+        {
+            "key": "storage",
+            "label": "proxmox::messages.settings.storage",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "proxmox::messages.settings.storage_help"
+        },
+        {
+            "key": "verify_tls",
+            "label": "proxmox::messages.settings.verify_tls",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "proxmox::messages.settings.verify_tls_help"
+        },
+        {
+            "key": "timeout",
+            "label": "proxmox::messages.settings.timeout",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "30",
+            "help": "proxmox::messages.settings.timeout_help"
+        }
+    ]
+}
