@@ -5,7 +5,7 @@
     "description": "Provisioning Extension for Pterodactyl panel servers.",
     "author": "Agovena",
     "category": "provisioning",
-    "agovena": "^0.1",
+    "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Pterodactyl\\PterodactylServiceProvider",
     "dependencies": [],
     "module_dependencies": ["provisioning"],

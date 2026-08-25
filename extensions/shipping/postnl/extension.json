@@ -5,7 +5,7 @@
     "description": "Shipping Extension for PostNL barcodes, labels, tracking, and optional live quotes.",
     "author": "Agovena",
     "category": "shipping",
-    "agovena": "^0.1",
+    "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Postnl\\PostnlServiceProvider",
     "dependencies": [],
     "module_dependencies": ["shipping"],

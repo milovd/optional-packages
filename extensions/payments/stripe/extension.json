@@ -5,7 +5,7 @@
     "description": "Payment Extension for Stripe Checkout, signed webhooks, refunds, and off-session charges.",
     "author": "Agovena",
     "category": "payment_gateway",
-    "agovena": "^0.1",
+    "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Stripe\\StripeServiceProvider",
     "dependencies": [],
     "settings": [

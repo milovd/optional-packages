@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "description": "Generic service instances for provisionable products. Provider adapters belong in Extensions.",
     "author": "Agovena",
-    "agovena": "^0.1",
+    "agovena": "^0.0.1",
     "group": "recurring",
   "provider": "Agovena\\Modules\\Provisioning\\ProvisioningServiceProvider",
     "dependencies": []

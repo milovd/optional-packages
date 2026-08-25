@@ -5,7 +5,7 @@
     "description": "Payment Extension for PayPal Checkout Orders, signed webhooks, refunds, and status sync.",
     "author": "Agovena",
     "category": "payment_gateway",
-    "agovena": "^0.1",
+    "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\PayPal\\PayPalServiceProvider",
     "dependencies": [],
     "settings": [

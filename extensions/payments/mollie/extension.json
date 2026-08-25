@@ -5,7 +5,7 @@
     "description": "Payment Extension for Mollie hosted checkout, webhooks, refunds, and status sync.",
     "author": "Agovena",
     "category": "payment_gateway",
-    "agovena": "^0.1",
+    "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Mollie\\MollieServiceProvider",
     "dependencies": [],
     "settings": [

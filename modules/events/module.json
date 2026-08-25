@@ -4,7 +4,7 @@
     "version": "1.0.0",
     "description": "Timed admission for theatre, concerts, workshops, and conferences. Ticket products issue unique tickets after payment.",
     "author": "Agovena",
-    "agovena": "^0.1",
+    "agovena": "^0.0.1",
     "group": "experiences",
     "provider": "Agovena\\Modules\\Events\\EventsServiceProvider",
     "dependencies": []
