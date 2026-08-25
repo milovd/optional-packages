@@ -11,6 +11,8 @@ use Agovena\Modules\Subscriptions\Events\SubscriptionCancelled;
 use Agovena\Modules\Subscriptions\Events\SubscriptionEnded;
 use Agovena\Modules\Subscriptions\Models\Subscription;
 use Agovena\Modules\Subscriptions\Models\SubscriptionRenewal;
+use App\Agovena\Billing\ConsolidatedBillingLine;
+use App\Agovena\Billing\ConsolidatedRenewalOrderBuilder;
 use App\Agovena\Invoices\IssueInvoiceFromOrder;
 use App\Agovena\Notifications\SendsCataloguedMail;
 use App\Agovena\Orders\CancelUnpaidOrder;
@@ -33,6 +35,7 @@ use App\Models\Product;
 use App\Models\ProductPlanChangeRequest;
 use App\Notifications\SubscriptionCancelledNotification;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -46,6 +49,7 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
 {
     public function __construct(
         private readonly IssueInvoiceFromOrder $issueInvoice,
+        private readonly ConsolidatedRenewalOrderBuilder $consolidatedOrderBuilder,
         private readonly ApplyPlanChange $applyPlanChange,
         private readonly CancelUnpaidOrder $cancelUnpaidOrder,
         private readonly ChargeRecurringPayment $chargeRecurring,
@@ -173,6 +177,7 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
     {
         $now ??= CarbonImmutable::now();
         $processed = 0;
+        $windowEnd = $now->addDays($this->consolidationWindowDays());
 
         $lock = Cache::lock('agovena.subscriptions.process-due', 120);
         if (! $lock->get()) {
@@ -182,10 +187,10 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         try {
             $ids = Subscription::query()
                 ->whereIn('status', [SubscriptionStatus::Active, SubscriptionStatus::PastDue])
-                ->where(function ($query) use ($now): void {
-                    $query->where(function ($due) use ($now): void {
-                        $due->whereNotNull('next_billing_at')
-                            ->where('next_billing_at', '<=', $now);
+                ->where(function ($query) use ($now, $windowEnd): void {
+                    $query->where(function ($candidate) use ($windowEnd): void {
+                        $candidate->whereNotNull('next_billing_at')
+                            ->where('next_billing_at', '<=', $windowEnd);
                     })->orWhere(function ($overdue) use ($now): void {
                         $overdue->whereNotNull('current_period_end')
                             ->where('current_period_end', '<=', $now);
@@ -195,14 +200,43 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
                 ->pluck('id');
 
             foreach ($ids as $id) {
+                DB::transaction(function () use ($id): void {
+                    /** @var Subscription|null $subscription */
+                    $subscription = Subscription::query()->whereKey($id)->lockForUpdate()->first();
+                    if ($subscription !== null) {
+                        $this->applyDuePlanChanges($subscription);
+                    }
+                });
+            }
+
+            $subscriptions = Subscription::query()
+                ->whereIn('id', $ids)
+                ->with('product')
+                ->get();
+            $processedSubscriptionIds = [];
+
+            foreach ($subscriptions->groupBy(fn (Subscription $subscription): string => $this->consolidationKey($subscription)) as $group) {
+                /** @var EloquentCollection<int, Subscription> $group */
+                $consolidated = $this->processConsolidatedGroup($group, $now, $windowEnd);
+                if ($consolidated === []) {
+                    continue;
+                }
+
+                $processedSubscriptionIds = array_merge($processedSubscriptionIds, $consolidated);
+                $processed += count($consolidated);
+            }
+
+            foreach ($ids as $id) {
+                if (in_array((int) $id, $processedSubscriptionIds, true)) {
+                    continue;
+                }
+
                 DB::transaction(function () use ($id, $now, &$processed): void {
                     /** @var Subscription|null $subscription */
                     $subscription = Subscription::query()->whereKey($id)->lockForUpdate()->first();
                     if ($subscription === null) {
                         return;
                     }
-
-                    $this->applyDuePlanChanges($subscription);
 
                     if ($subscription->cancel_at_period_end) {
                         $periodEnd = $subscription->current_period_end;
@@ -230,6 +264,157 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         }
 
         return $processed;
+    }
+
+    /**
+     * @param EloquentCollection<int, Subscription> $group
+     * @return list<int>
+     */
+    private function processConsolidatedGroup(
+        EloquentCollection $group,
+        CarbonImmutable $now,
+        CarbonImmutable $windowEnd,
+    ): array {
+        if ($group->count() < 2) {
+            return [];
+        }
+
+        $ids = array_map('intval', $group->modelKeys());
+        $result = DB::transaction(function () use ($ids, $now, $windowEnd): ?array {
+            $locked = Subscription::query()
+                ->whereIn('id', $ids)
+                ->with('product')
+                ->lockForUpdate()
+                ->get();
+            $eligible = $locked->filter(function (Subscription $subscription) use ($now, $windowEnd): bool {
+                if (! in_array($subscription->status, [SubscriptionStatus::Active, SubscriptionStatus::PastDue], true)) {
+                    return false;
+                }
+
+                if ($subscription->cancel_at_period_end || $subscription->next_billing_at === null) {
+                    return false;
+                }
+
+                if (CarbonImmutable::parse($subscription->next_billing_at)->greaterThan($windowEnd)) {
+                    return false;
+                }
+
+                return ! $this->hasPendingRenewal($subscription);
+            })->values();
+            $due = $eligible->filter(fn (Subscription $subscription): bool => $this->isDue($subscription, $now));
+
+            if ($eligible->count() < 2 || $due->isEmpty()) {
+                return null;
+            }
+
+            $earliestDue = null;
+            foreach ($eligible as $subscription) {
+                $dueAt = CarbonImmutable::parse($subscription->next_billing_at);
+                if ($earliestDue === null || $dueAt->lessThan($earliestDue)) {
+                    $earliestDue = $dueAt;
+                }
+            }
+
+            if ($earliestDue === null) {
+                return null;
+            }
+
+            $lines = [];
+            $periodEnds = [];
+            foreach ($eligible as $subscription) {
+                $dueAt = CarbonImmutable::parse($subscription->next_billing_at);
+                $periodEnd = $this->addInterval($earliestDue, $subscription->interval, $subscription->interval_count);
+                $periodStart = $subscription->current_period_start !== null
+                    ? CarbonImmutable::parse($subscription->current_period_start)
+                    : $dueAt->subDays(max(1, (int) $dueAt->diffInDays($periodEnd)));
+                $periodDays = max(1, (int) $periodStart->diffInDays(CarbonImmutable::parse($subscription->current_period_end ?? $dueAt)));
+                $originItem = $subscription->order_item_id !== null
+                    ? OrderItem::query()->find($subscription->order_item_id)
+                    : null;
+                $product = $subscription->product;
+
+                $lines[] = new ConsolidatedBillingLine(
+                    sourceType: 'subscription',
+                    sourceId: (int) $subscription->id,
+                    customerId: $subscription->customer_id,
+                    customerName: (string) ($subscription->customer_name ?? $subscription->customer_email),
+                    customerEmail: (string) $subscription->customer_email,
+                    currency: strtoupper((string) $subscription->currency),
+                    gatewayId: $this->gatewayIdFromSubscription($subscription),
+                    productId: $subscription->product_id,
+                    originOrderItemId: $subscription->order_item_id,
+                    label: $product !== null ? $product->name : (string) __('subscriptions::admin.renewal_item'),
+                    quantity: max(1, (int) $subscription->quantity),
+                    unitAmount: max(0, (int) $subscription->price_amount),
+                    dueAt: $dueAt,
+                    nextPeriodEnd: $periodEnd,
+                    periodDays: $periodDays,
+                    daysAlreadyPaid: max(0, (int) $earliestDue->diffInDays($dueAt)),
+                    optionsSnapshot: $originItem?->options_snapshot ?? [],
+                );
+                $periodEnds[(int) $subscription->id] = $periodEnd;
+            }
+
+            $order = $this->consolidatedOrderBuilder->create($lines);
+            foreach ($eligible as $subscription) {
+                SubscriptionRenewal::query()->firstOrCreate(
+                    [
+                        'subscription_id' => $subscription->id,
+                        'period_start' => $earliestDue,
+                    ],
+                    [
+                        'order_id' => $order->id,
+                        'period_end' => $periodEnds[(int) $subscription->id],
+                        'status' => RenewalStatus::Pending,
+                    ],
+                );
+            }
+
+            return [
+                'subscription_ids' => array_map('intval', $eligible->modelKeys()),
+                'order_id' => (int) $order->id,
+            ];
+        });
+
+        if ($result === null) {
+            return [];
+        }
+
+        $order = Order::query()->with('payment')->findOrFail($result['order_id']);
+        $primary = Subscription::query()->findOrFail($result['subscription_ids'][0]);
+        $this->processRenewalCharge($primary, $order, true, $now);
+        foreach ($result['subscription_ids'] as $subscriptionId) {
+            $subscription = Subscription::query()->find($subscriptionId);
+            if ($subscription !== null) {
+                $this->markPastDueIfUnpaid($subscription, $now);
+            }
+        }
+
+        return $result['subscription_ids'];
+    }
+
+    private function isDue(Subscription $subscription, CarbonImmutable $now): bool
+    {
+        $nextBillingAt = $subscription->next_billing_at;
+        if ($nextBillingAt !== null && CarbonImmutable::parse($nextBillingAt)->lessThanOrEqualTo($now)) {
+            return true;
+        }
+
+        $periodEnd = $subscription->current_period_end;
+
+        return $periodEnd !== null && CarbonImmutable::parse($periodEnd)->lessThanOrEqualTo($now);
+    }
+
+    private function consolidationKey(Subscription $subscription): string
+    {
+        return implode('|', [
+            (string) $subscription->customer_id,
+            strtolower((string) $subscription->customer_email),
+            strtoupper((string) $subscription->currency),
+            $this->gatewayIdFromSubscription($subscription),
+            $subscription->interval->value,
+            (string) $subscription->interval_count,
+        ]);
     }
 
     public function ensureRenewalOrder(Subscription $subscription): Order
@@ -427,9 +612,9 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         }
 
         if (! $this->autoChargeEnabled()) {
-            $this->markManualPaymentRequired($renewal);
+            $this->markManualPaymentRequiredForOrder($order);
             if ($isNewOrder) {
-                $this->notifyRenewalPayable($subscription, $order);
+                $this->notifyRenewalPayableForOrder($order);
             }
 
             return RecurringChargeResult::skipped('auto_charge_disabled');
@@ -437,7 +622,7 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
 
         if ($renewal->require_manual_payment) {
             if ($isNewOrder) {
-                $this->notifyRenewalPayable($subscription, $order);
+                $this->notifyRenewalPayableForOrder($order);
             }
 
             return RecurringChargeResult::skipped('manual_required');
@@ -445,7 +630,7 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
 
         $maxAttempts = $this->retryMax();
         if ((int) $renewal->charge_attempts >= $maxAttempts) {
-            $this->applyRetriesExhausted($subscription, $renewal);
+            $this->applyRetriesExhaustedForOrder($order);
 
             return RecurringChargeResult::skipped('retries_exhausted');
         }
@@ -470,30 +655,36 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
 
     public function applyPaidRenewal(Order $order): void
     {
-        $renewal = SubscriptionRenewal::query()
-            ->where('order_id', $order->id)
-            ->where('status', RenewalStatus::Pending)
-            ->first();
+        DB::transaction(function () use ($order): void {
+            $renewals = SubscriptionRenewal::query()
+                ->where('order_id', $order->id)
+                ->where('status', RenewalStatus::Pending)
+                ->lockForUpdate()
+                ->get();
 
-        if ($renewal === null) {
-            return;
-        }
+            if ($renewals->isEmpty()) {
+                return;
+            }
 
-        /** @var Subscription $subscription */
-        $subscription = Subscription::query()->whereKey($renewal->subscription_id)->firstOrFail();
+            $autoCharged = $this->wasAutoCharged($order);
+            foreach ($renewals as $renewal) {
+                /** @var Subscription $subscription */
+                $subscription = Subscription::query()->whereKey($renewal->subscription_id)->firstOrFail();
 
-        $renewal->status = RenewalStatus::Paid;
-        $renewal->save();
+                $renewal->status = RenewalStatus::Paid;
+                $renewal->save();
 
-        $subscription->status = SubscriptionStatus::Active;
-        $subscription->current_period_start = $renewal->period_start;
-        $subscription->current_period_end = $renewal->period_end;
-        $subscription->next_billing_at = $renewal->period_end;
-        $subscription->save();
+                $subscription->status = SubscriptionStatus::Active;
+                $subscription->current_period_start = $renewal->period_start;
+                $subscription->current_period_end = $renewal->period_end;
+                $subscription->next_billing_at = $renewal->period_end;
+                $subscription->save();
 
-        if ($this->wasAutoCharged($order)) {
-            $this->notifyRenewalPaid($subscription, $order);
-        }
+                if ($autoCharged) {
+                    $this->notifyRenewalPaid($subscription, $order);
+                }
+            }
+        });
     }
 
     private function wasAutoCharged(Order $order): bool
@@ -659,6 +850,40 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
             ->exists();
     }
 
+    private function pendingRenewalsForOrder(Order $order): EloquentCollection
+    {
+        return SubscriptionRenewal::query()
+            ->where('order_id', $order->id)
+            ->where('status', RenewalStatus::Pending)
+            ->get();
+    }
+
+    private function markManualPaymentRequiredForOrder(Order $order, ?string $message = null): void
+    {
+        foreach ($this->pendingRenewalsForOrder($order) as $renewal) {
+            $this->markManualPaymentRequired($renewal, $message);
+        }
+    }
+
+    private function applyRetriesExhaustedForOrder(Order $order): void
+    {
+        foreach ($this->pendingRenewalsForOrder($order) as $renewal) {
+            /** @var Subscription $subscription */
+            $subscription = Subscription::query()->whereKey($renewal->subscription_id)->firstOrFail();
+            $this->applyRetriesExhausted($subscription, $renewal);
+        }
+    }
+
+    private function notifyRenewalPayableForOrder(Order $order): void
+    {
+        foreach ($this->pendingRenewalsForOrder($order) as $renewal) {
+            $subscription = Subscription::query()->whereKey($renewal->subscription_id)->first();
+            if ($subscription !== null) {
+                $this->notifyRenewalPayable($subscription, $order);
+            }
+        }
+    }
+
     private function applyChargeResult(
         Subscription $subscription,
         Order $order,
@@ -667,51 +892,59 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         bool $isNewOrder,
         CarbonImmutable $now,
     ): void {
-        $renewal = $renewal->fresh() ?? $renewal;
-        $renewal->last_charged_at = $now;
-
-        if ($result->outcome === RecurringChargeOutcome::Charged) {
-            $renewal->auto_charge_attempted = true;
-            $renewal->last_error = null;
-            $renewal->next_retry_at = null;
-            $renewal->save();
-
-            return;
+        $renewals = $this->pendingRenewalsForOrder($order);
+        if ($renewals->isEmpty()) {
+            $renewals = new EloquentCollection([$renewal]);
         }
 
-        if ($result->outcome === RecurringChargeOutcome::Pending) {
-            $renewal->auto_charge_attempted = true;
-            $renewal->save();
+        foreach ($renewals as $currentRenewal) {
+            $currentRenewal = $currentRenewal->fresh() ?? $currentRenewal;
+            $currentRenewal->last_charged_at = $now;
 
-            return;
-        }
+            if ($result->outcome === RecurringChargeOutcome::Charged) {
+                $currentRenewal->auto_charge_attempted = true;
+                $currentRenewal->last_error = null;
+                $currentRenewal->next_retry_at = null;
+                $currentRenewal->save();
 
-        if ($result->authorizationMissing || $result->outcome === RecurringChargeOutcome::Skipped) {
-            $this->markManualPaymentRequired($renewal, $result->message);
-            if ($isNewOrder) {
-                $this->notifyRenewalPayable($subscription, $order);
+                continue;
             }
 
-            return;
-        }
+            if ($result->outcome === RecurringChargeOutcome::Pending) {
+                $currentRenewal->auto_charge_attempted = true;
+                $currentRenewal->save();
 
-        $renewal->auto_charge_attempted = true;
-        $renewal->charge_attempts = (int) $renewal->charge_attempts + 1;
-        $renewal->last_error = $this->safeError($result->message);
-        if ((int) $renewal->charge_attempts < $this->retryMax()) {
-            $renewal->next_retry_at = $now->addHours($this->retryHours());
-            $renewal->save();
-        } else {
-            $renewal->next_retry_at = null;
-            $renewal->require_manual_payment = true;
-            $renewal->save();
-            $this->applyRetriesExhaustedPolicy($subscription);
-        }
+                continue;
+            }
 
-        if ($renewal->failure_notified_at === null) {
-            $this->notifyRenewalFailed($subscription, $order);
-            $renewal->failure_notified_at = $now;
-            $renewal->save();
+            $currentSubscription = Subscription::query()->whereKey($currentRenewal->subscription_id)->firstOrFail();
+            if ($result->authorizationMissing || $result->outcome === RecurringChargeOutcome::Skipped) {
+                $this->markManualPaymentRequired($currentRenewal, $result->message);
+                if ($isNewOrder) {
+                    $this->notifyRenewalPayable($currentSubscription, $order);
+                }
+
+                continue;
+            }
+
+            $currentRenewal->auto_charge_attempted = true;
+            $currentRenewal->charge_attempts = (int) $currentRenewal->charge_attempts + 1;
+            $currentRenewal->last_error = $this->safeError($result->message);
+            if ((int) $currentRenewal->charge_attempts < $this->retryMax()) {
+                $currentRenewal->next_retry_at = $now->addHours($this->retryHours());
+                $currentRenewal->save();
+            } else {
+                $currentRenewal->next_retry_at = null;
+                $currentRenewal->require_manual_payment = true;
+                $currentRenewal->save();
+                $this->applyRetriesExhaustedPolicy($currentSubscription);
+            }
+
+            if ($currentRenewal->failure_notified_at === null) {
+                $this->notifyRenewalFailed($currentSubscription, $order);
+                $currentRenewal->failure_notified_at = $now;
+                $currentRenewal->save();
+            }
         }
     }
 
@@ -831,6 +1064,11 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         }
 
         return 'manual';
+    }
+
+    private function consolidationWindowDays(): int
+    {
+        return max(1, min(31, (int) $this->settings->get('store', 'subscription_consolidation_window_days', 31)));
     }
 
     private function autoChargeEnabled(): bool
