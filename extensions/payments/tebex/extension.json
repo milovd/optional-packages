@@ -1,0 +1,49 @@
+{
+    "id": "tebex",
+    "name": "Tebex",
+    "version": "1.0.0",
+    "description": "First-party Tebex Checkout gateway for game-commerce packages, signed webhooks, and refunds.",
+    "author": "Agovena",
+    "category": "payment_gateway",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\Tebex\\TebexServiceProvider",
+    "dependencies": [],
+    "settings": [
+        {
+            "key": "project_id",
+            "label": "tebex::messages.settings.project_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "tebex::messages.settings.project_id_help"
+        },
+        {
+            "key": "secret_key",
+            "label": "tebex::messages.settings.secret_key",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "tebex::messages.settings.secret_key_help"
+        },
+        {
+            "key": "webhook_secret",
+            "label": "tebex::messages.settings.webhook_secret",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "tebex::messages.settings.webhook_secret_help"
+        },
+        {
+            "key": "package_map",
+            "label": "tebex::messages.settings.package_map",
+            "type": "textarea",
+            "secret": false,
+            "required": true,
+            "default": "{}",
+            "help": "tebex::messages.settings.package_map_help"
+        }
+    ]
+}

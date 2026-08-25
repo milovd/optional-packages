@@ -1,0 +1,49 @@
+{
+    "id": "paddle",
+    "name": "Paddle",
+    "version": "1.0.0",
+    "description": "First-party Paddle Billing gateway for hosted checkout, signed webhooks, and refunds.",
+    "author": "Agovena",
+    "category": "payment_gateway",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\Paddle\\PaddleServiceProvider",
+    "dependencies": [],
+    "settings": [
+        {
+            "key": "api_key",
+            "label": "paddle::messages.settings.api_key",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "paddle::messages.settings.api_key_help"
+        },
+        {
+            "key": "webhook_secret",
+            "label": "paddle::messages.settings.webhook_secret",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "paddle::messages.settings.webhook_secret_help"
+        },
+        {
+            "key": "price_map",
+            "label": "paddle::messages.settings.price_map",
+            "type": "textarea",
+            "secret": false,
+            "required": true,
+            "default": "{}",
+            "help": "paddle::messages.settings.price_map_help"
+        },
+        {
+            "key": "sandbox",
+            "label": "paddle::messages.settings.sandbox",
+            "type": "boolean",
+            "secret": false,
+            "required": true,
+            "default": true,
+            "help": "paddle::messages.settings.sandbox_help"
+        }
+    ]
+}
