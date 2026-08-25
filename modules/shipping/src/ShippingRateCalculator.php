@@ -16,7 +16,7 @@ use App\Models\Product;
 final class ShippingRateCalculator
 {
     /**
-     * @param list<PricedCartLine> $shippableLines
+     * @param  list<PricedCartLine>  $shippableLines
      */
     public function amount(ShippingMethod $method, array $shippableLines, string $currency): Money
     {
@@ -34,7 +34,7 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param list<PricedCartLine> $shippableLines
+     * @param  list<PricedCartLine>  $shippableLines
      */
     public function isEligible(ShippingMethod $method, array $shippableLines, string $countryCode, string $currency): bool
     {
@@ -81,7 +81,7 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param array<string, mixed> $config
+     * @param  array<string, mixed>  $config
      */
     private function free(array $config, Money $subtotal, string $currency): Money
     {
@@ -120,7 +120,7 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param list<PricedCartLine> $lines
+     * @param  list<PricedCartLine>  $lines
      */
     private function linesSubtotal(array $lines, string $currency): Money
     {
@@ -133,7 +133,7 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param list<PricedCartLine> $lines
+     * @param  list<PricedCartLine>  $lines
      */
     private function linesWeightGrams(array $lines): int
     {

@@ -368,7 +368,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function attachCustomerSequence(MollieApi $api, PaymentInitiation $request, array &$payload): void
     {
@@ -405,7 +405,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $created
+     * @param  array<string, mixed>  $created
      */
     private function rememberMandate(PaymentInitiation $request, array $created): void
     {
@@ -413,7 +413,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $remote
+     * @param  array<string, mixed>  $remote
      */
     private function captureMandateFromRemote(array $remote): void
     {
@@ -431,7 +431,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $remote
+     * @param  array<string, mixed>  $remote
      */
     private function rememberMandateFromPayment(Payment $payment, array $remote): void
     {
@@ -516,7 +516,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $payment
+     * @param  array<string, mixed>  $payment
      */
     private function statusFromProviderPayment(array $payment): PaymentStatus
     {

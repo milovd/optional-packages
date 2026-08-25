@@ -471,7 +471,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $session
+     * @param  array<string, mixed>  $session
      */
     private function externalIdFromSession(array $session): string
     {
@@ -487,7 +487,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $object
+     * @param  array<string, mixed>  $object
      */
     private function paymentIdFromObject(array $object): string
     {
@@ -598,7 +598,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $session
+     * @param  array<string, mixed>  $session
      */
     private function rememberCustomerFromSession(PaymentInitiation $request, array $session): void
     {
@@ -618,7 +618,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $object
+     * @param  array<string, mixed>  $object
      */
     private function captureAuthorizationFromObject(array $object): void
     {
@@ -649,7 +649,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $intent
+     * @param  array<string, mixed>  $intent
      */
     private function rememberAuthorizationFromIntent(?int $customerId, string $email, array $intent): void
     {
@@ -663,7 +663,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param array<string, mixed> $object
+     * @param  array<string, mixed>  $object
      */
     private function paymentMethodId(array $object): ?string
     {
