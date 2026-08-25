@@ -29,6 +29,10 @@ Store presets and product quick-start choices are helpers. They enable Modules /
 
 True technical dependencies are declared in each Module’s `module.json`. Presets may *recommend* combinations (e.g. Inventory + Shipping) without creating hard dependencies.
 
+## Distribution
+
+First-party Modules ship in this monorepo and are installed into Agovena via Admin (monorepo URL or `AGOVENA_OPTIONAL_PACKAGES_PATH`). Materialized copies live under Core `storage/app/packages/modules/{id}`.
+
 ## Layout
 
 ```

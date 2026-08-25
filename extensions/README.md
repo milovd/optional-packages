@@ -9,7 +9,7 @@ This is the Paymenter-style extensibility *problem* (register a package, hook in
 
 ## Distribution
 
-Composer / GitHub oriented. Do **not** execute arbitrary uploaded PHP ZIPs.
+Install from Agovena Admin via the optional-packages monorepo (`AGOVENA_PACKAGES_MONOREPO_URL`) or a local path (`AGOVENA_OPTIONAL_PACKAGES_PATH`). Prefer Composer/GitHub oriented installs. Treat uploaded ZIP PHP as high trust - only use reviewed packages.
 
 ## Layout
 
@@ -60,7 +60,9 @@ Extensions must not bypass server-authoritative prices, webhook authority, or Ad
 
 `extensions/payments/mollie` is the first production Payment Extension: hosted checkout, webhooks, refunds, and status sync behind the generic `PaymentGateway` contracts.
 `extensions/payments/stripe` is the second production Payment Extension: Stripe Checkout, signed webhooks, refunds, and off-session charges behind the same contracts.
+`extensions/payments/paypal` is the third production Payment Extension: PayPal Checkout behind the same contracts.
 `extensions/provisioning/pterodactyl` is the first production Provisioning Extension: panel lifecycle behind the generic `Provisioner` contracts.
+`extensions/provisioning/proxmox` is the second production Provisioning Extension: Proxmox VE lifecycle behind the same contracts.
 `extensions/shipping/postnl` is the first production Shipping Extension: barcodes, labels, and tracking behind the generic `ShippingCarrier` contracts.
 
 ## Implementing a Payment Extension
@@ -89,4 +91,4 @@ Extensions must not bypass server-authoritative prices, webhook authority, or Ad
 4. Provider service codes, labels, and tracking stay Extension-owned. Generic Shipment may store `carrier_id`, `external_ref`, tracking, and a private label path
 5. Tests must fake provider HTTP. CI must not require live credentials
 
-Mollie/Stripe/Pterodactyl/PostNL-specific types must not appear in Core or Modules.
+Mollie/Stripe/PayPal/Pterodactyl/Proxmox/PostNL-specific types must not appear in Core or Modules.

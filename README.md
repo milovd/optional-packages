@@ -59,3 +59,5 @@ Core will discover packages from that path via `extra_module_paths` / `extra_ext
 ## License
 
 MIT - see [LICENSE](LICENSE).
+
+Upstream Core documents third-party FX/VAT data sources in [Agovena ATTRIBUTION.md](https://github.com/milovd/Agovena/blob/main/ATTRIBUTION.md).
