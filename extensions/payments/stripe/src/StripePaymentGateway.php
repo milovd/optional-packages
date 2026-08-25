@@ -67,7 +67,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     public function checkoutMethods(): array
     {
-        // Paymenter-style: one storefront option; Stripe Checkout lists methods.
+        // Stripe Checkout lists the configured payment methods.
         return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
     }
 
@@ -116,7 +116,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         if ($restricted !== []) {
             $payload['payment_method_types'] = $restricted;
         }
-        // Otherwise omit types - Stripe Checkout shows dashboard-configured methods (Paymenter-style).
+        // Otherwise omit types so Stripe Checkout uses dashboard-configured methods.
 
         try {
             $session = $api->createCheckoutSession($payload, $request->idempotencyKey);

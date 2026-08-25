@@ -5,7 +5,7 @@ Easy plugins that extend Agovena through public seams. Distinct from Modules.
 - **Modules** add platform capabilities/domains (events/tickets, inventory, shipping, digital, provisioning, …).
 - **Extensions** plug into existing seams without forking Core: payment/shipping/provisioning gateways, Admin tabs/pages/settings, cart/checkout requirements, invoice presentation.
 
-This is the Paymenter-style extensibility *problem* (register a package, hook in) expressed as Agovena contracts - not Filament, not their UI.
+Agovena exposes explicit contracts for registering packages and connecting them to supported extension seams. Extensions do not fork Core or depend on a specific admin UI framework.
 
 ## Distribution
 

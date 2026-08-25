@@ -68,7 +68,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     public function checkoutMethods(): array
     {
-        // Paymenter-style: one storefront option; Mollie hosted checkout lists methods.
+        // Mollie hosted checkout lists the configured payment methods.
         return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
     }
 
