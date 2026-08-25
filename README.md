@@ -18,11 +18,12 @@ optional-packages/
 │   └── events/
 └── extensions/
     ├── payments/
-    │   ├── manual-payment/
     │   ├── mollie/
-    │   └── stripe/
+    │   ├── stripe/
+    │   └── paypal/
     ├── provisioning/
-    │   └── pterodactyl/
+    │   ├── pterodactyl/
+    │   └── proxmox/
     └── shipping/
         └── postnl/
 ```

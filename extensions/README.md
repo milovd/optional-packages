@@ -20,9 +20,10 @@ extensions/
   payments/
     mollie/
     stripe/
-    manual-payment/
+    paypal/
   provisioning/
     pterodactyl/
+    proxmox/
   shipping/
     postnl/
 ```
@@ -57,7 +58,6 @@ Extensions must not bypass server-authoritative prices, webhook authority, or Ad
 
 ## Reference
 
-`extensions/payments/manual-payment` is the lifecycle reference adapter (manual + optional development).
 `extensions/payments/mollie` is the first production Payment Extension: hosted checkout, webhooks, refunds, and status sync behind the generic `PaymentGateway` contracts.
 `extensions/payments/stripe` is the second production Payment Extension: Stripe Checkout, signed webhooks, refunds, and off-session charges behind the same contracts.
 `extensions/provisioning/pterodactyl` is the first production Provisioning Extension: panel lifecycle behind the generic `Provisioner` contracts.
