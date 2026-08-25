@@ -26,7 +26,6 @@ use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use App\Support\MoneyFormatter;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -69,28 +68,8 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     public function checkoutMethods(): array
     {
-        $discovered = $this->discoveredMethods();
-        $enabled = $this->enabledMethodIds();
-        $source = $discovered !== [] ? $discovered : $this->fallbackMethods($enabled);
-
-        $methods = [];
-        foreach ($source as $row) {
-            $id = $row['id'];
-            if ($enabled !== [] && ! in_array($id, $enabled, true)) {
-                continue;
-            }
-            $methods[] = new CheckoutPaymentMethod(
-                gatewayId: self::ID,
-                id: self::ID.':'.$id,
-                label: $this->methodLabel($id, $row['description']),
-            );
-        }
-
-        if ($methods === []) {
-            return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
-        }
-
-        return $methods;
+        // Paymenter-style: one storefront option; Mollie hosted checkout lists methods.
+        return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
     }
 
     public function initiate(PaymentInitiation $request): PaymentInitiationResult
@@ -100,7 +79,6 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             return PaymentInitiationResult::failed(__('mollie::messages.errors.not_configured'));
         }
 
-        $method = $request->metadata['checkout_method'] ?? null;
         $payload = [
             'amount' => [
                 'currency' => $request->payment->currency,
@@ -117,8 +95,12 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             'locale' => $this->locale(),
         ];
 
-        if (is_string($method) && $method !== '') {
-            $payload['method'] = $method;
+        // Prefer admin-restricted methods; otherwise Mollie hosted checkout shows profile methods.
+        $restricted = $this->enabledMethodIds();
+        if (count($restricted) === 1) {
+            $payload['method'] = $restricted[0];
+        } elseif (count($restricted) > 1) {
+            $payload['method'] = $restricted;
         }
 
         $this->attachCustomerSequence($api, $request, $payload);
@@ -380,13 +362,13 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
         return HealthResult::ok(__('mollie::messages.health.ok', [
             'mode' => $mode,
-            'methods' => $ids !== [] ? implode(', ', $ids) : '—',
+            'methods' => $ids !== [] ? implode(', ', $ids) : '-',
             'webhook' => $this->webhookUrl(),
         ]));
     }
 
     /**
-     * @param  array<string, mixed>  $payload
+     * @param array<string, mixed> $payload
      */
     private function attachCustomerSequence(MollieApi $api, PaymentInitiation $request, array &$payload): void
     {
@@ -423,7 +405,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $created
+     * @param array<string, mixed> $created
      */
     private function rememberMandate(PaymentInitiation $request, array $created): void
     {
@@ -431,7 +413,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $remote
+     * @param array<string, mixed> $remote
      */
     private function captureMandateFromRemote(array $remote): void
     {
@@ -449,7 +431,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $remote
+     * @param array<string, mixed> $remote
      */
     private function rememberMandateFromPayment(Payment $payment, array $remote): void
     {
@@ -534,7 +516,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $payment
+     * @param array<string, mixed> $payment
      */
     private function statusFromProviderPayment(array $payment): PaymentStatus
     {
@@ -610,30 +592,6 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @return list<array{id: string, description: string}>
-     */
-    private function discoveredMethods(): array
-    {
-        $stored = $this->settings->get('mollie', 'discovered_methods', []);
-        if (! is_array($stored)) {
-            return [];
-        }
-
-        $out = [];
-        foreach ($stored as $row) {
-            if (! is_array($row) || ! isset($row['id']) || ! is_string($row['id'])) {
-                continue;
-            }
-            $out[] = [
-                'id' => $row['id'],
-                'description' => is_string($row['description'] ?? null) ? $row['description'] : $row['id'],
-            ];
-        }
-
-        return $out;
-    }
-
-    /**
      * @return list<string>
      */
     private function enabledMethodIds(): array
@@ -652,23 +610,5 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
         }
 
         return array_values(array_unique($ids));
-    }
-
-    /**
-     * @param  list<string>  $enabled
-     * @return list<array{id: string, description: string}>
-     */
-    private function fallbackMethods(array $enabled): array
-    {
-        $ids = $enabled !== [] ? $enabled : ['ideal', 'bancontact', 'creditcard', 'paypal'];
-
-        return array_map(static fn (string $id): array => ['id' => $id, 'description' => $id], $ids);
-    }
-
-    private function methodLabel(string $id, string $fallback): string
-    {
-        $key = 'mollie::messages.methods.'.$id;
-
-        return Lang::has($key) ? $key : $fallback;
     }
 }

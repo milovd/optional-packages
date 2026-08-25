@@ -40,7 +40,7 @@ return [
     'payment_method' => 'Betaalmethode',
     'authorization' => 'Herbruikbare autorisatie',
     'authorization_available' => 'Beschikbaar',
-    'authorization_unavailable' => 'Niet beschikbaar — betaal elke verlenging handmatig',
+    'authorization_unavailable' => 'Niet beschikbaar - betaal elke verlenging handmatig',
     'renewal_failed' => 'De laatste automatische verlengingsafschrijving is niet gelukt.',
     'pay_now' => 'Nu betalen',
     'timing' => [

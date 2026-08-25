@@ -48,7 +48,7 @@ final class AssetsIndex extends Component
             'product_id' => ['required', 'integer', 'exists:products,id'],
             'label' => ['required', 'string', 'max:120'],
             'download_limit' => ['nullable', 'integer', 'min:1'],
-            // Private downloads only — never trust browser extensions alone; block executables/SVG.
+            // Private downloads only - never trust browser extensions alone; block executables/SVG.
             'file' => [
                 'required',
                 'file',

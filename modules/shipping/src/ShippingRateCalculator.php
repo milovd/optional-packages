@@ -11,12 +11,12 @@ use App\Agovena\Money\Money;
 use App\Models\Product;
 
 /**
- * Explicit, simple rate rules — not an enterprise rules engine.
+ * Explicit, simple rate rules - not an enterprise rules engine.
  */
 final class ShippingRateCalculator
 {
     /**
-     * @param  list<PricedCartLine>  $shippableLines
+     * @param list<PricedCartLine> $shippableLines
      */
     public function amount(ShippingMethod $method, array $shippableLines, string $currency): Money
     {
@@ -34,7 +34,7 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param  list<PricedCartLine>  $shippableLines
+     * @param list<PricedCartLine> $shippableLines
      */
     public function isEligible(ShippingMethod $method, array $shippableLines, string $countryCode, string $currency): bool
     {
@@ -81,13 +81,13 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param  array<string, mixed>  $config
+     * @param array<string, mixed> $config
      */
     private function free(array $config, Money $subtotal, string $currency): Money
     {
         $min = isset($config['min_subtotal']) ? (int) $config['min_subtotal'] : null;
         if ($min !== null && $subtotal->amount < $min) {
-            // Still eligible as a method only when min met — amount unused if ineligible.
+            // Still eligible as a method only when min met - amount unused if ineligible.
             return Money::of(0, $currency);
         }
 
@@ -120,7 +120,7 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param  list<PricedCartLine>  $lines
+     * @param list<PricedCartLine> $lines
      */
     private function linesSubtotal(array $lines, string $currency): Money
     {
@@ -133,7 +133,7 @@ final class ShippingRateCalculator
     }
 
     /**
-     * @param  list<PricedCartLine>  $lines
+     * @param list<PricedCartLine> $lines
      */
     private function linesWeightGrams(array $lines): int
     {

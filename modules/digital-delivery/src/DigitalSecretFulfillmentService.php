@@ -22,7 +22,7 @@ use Illuminate\Validation\ValidationException;
  * or records a pending manual/provider delivery for staff to complete.
  *
  * Plaintext secrets are never logged, never placed in mail bodies, and never
- * exposed through a URL — mail only links to the customer account page.
+ * exposed through a URL - mail only links to the customer account page.
  */
 final class DigitalSecretFulfillmentService
 {
@@ -37,7 +37,7 @@ final class DigitalSecretFulfillmentService
      * Refuse an order that would oversell a pool. Cart lines may repeat a product
      * (different purchase options), so quantities are summed per product first.
      *
-     * @param  iterable<object{productId: int, quantity: int}>  $items
+     * @param iterable<object{productId: int, quantity: int}> $items
      */
     public function assertPoolAvailableForCart(iterable $items): void
     {
@@ -234,7 +234,7 @@ final class DigitalSecretFulfillmentService
     /**
      * Add merchant-supplied codes to a product pool, skipping values already present.
      *
-     * @param  list<string>  $values
+     * @param list<string> $values
      * @return array{added: int, skipped: int}
      */
     public function addPoolItems(Product $product, array $values, ?string $label = null): array

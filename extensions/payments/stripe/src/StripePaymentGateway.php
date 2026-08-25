@@ -25,7 +25,6 @@ use App\Enums\PaymentStatus;
 use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -68,19 +67,8 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     public function checkoutMethods(): array
     {
-        $enabled = $this->enabledMethodIds();
-        $source = $enabled !== [] ? $enabled : ['card'];
-
-        $methods = [];
-        foreach ($source as $id) {
-            $methods[] = new CheckoutPaymentMethod(
-                gatewayId: self::ID,
-                id: self::ID.':'.$id,
-                label: $this->methodLabel($id),
-            );
-        }
-
-        return $methods;
+        // Paymenter-style: one storefront option; Stripe Checkout lists methods.
+        return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
     }
 
     public function initiate(PaymentInitiation $request): PaymentInitiationResult
@@ -124,10 +112,11 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             $payload['customer_creation'] = 'always';
         }
 
-        $method = $request->metadata['checkout_method'] ?? null;
-        if (is_string($method) && $method !== '') {
-            $payload['payment_method_types'] = [$method];
+        $restricted = $this->enabledMethodIds();
+        if ($restricted !== []) {
+            $payload['payment_method_types'] = $restricted;
         }
+        // Otherwise omit types - Stripe Checkout shows dashboard-configured methods (Paymenter-style).
 
         try {
             $session = $api->createCheckoutSession($payload, $request->idempotencyKey);
@@ -481,15 +470,8 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         return $ids;
     }
 
-    private function methodLabel(string $id): string
-    {
-        $key = 'stripe::messages.methods.'.$id;
-
-        return Lang::has($key) ? (string) __($key) : $id;
-    }
-
     /**
-     * @param  array<string, mixed>  $session
+     * @param array<string, mixed> $session
      */
     private function externalIdFromSession(array $session): string
     {
@@ -505,7 +487,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $object
+     * @param array<string, mixed> $object
      */
     private function paymentIdFromObject(array $object): string
     {
@@ -616,7 +598,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $session
+     * @param array<string, mixed> $session
      */
     private function rememberCustomerFromSession(PaymentInitiation $request, array $session): void
     {
@@ -636,7 +618,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $object
+     * @param array<string, mixed> $object
      */
     private function captureAuthorizationFromObject(array $object): void
     {
@@ -667,7 +649,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $intent
+     * @param array<string, mixed> $intent
      */
     private function rememberAuthorizationFromIntent(?int $customerId, string $email, array $intent): void
     {
@@ -681,7 +663,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @param  array<string, mixed>  $object
+     * @param array<string, mixed> $object
      */
     private function paymentMethodId(array $object): ?string
     {

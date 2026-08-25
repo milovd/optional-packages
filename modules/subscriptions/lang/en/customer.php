@@ -40,7 +40,7 @@ return [
     'payment_method' => 'Payment method',
     'authorization' => 'Reusable authorization',
     'authorization_available' => 'Available',
-    'authorization_unavailable' => 'Not available — pay each renewal manually',
+    'authorization_unavailable' => 'Not available - pay each renewal manually',
     'renewal_failed' => 'The last automatic renewal charge did not succeed.',
     'pay_now' => 'Pay now',
     'timing' => [

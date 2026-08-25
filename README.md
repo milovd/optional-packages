@@ -1,6 +1,6 @@
 # Agovena Optional Packages
 
-Official monorepo of optional **Modules** and **Extensions** for [Agovena](https://github.com/milovd/Agovena) — the open-source modular commerce platform.
+Official monorepo of optional **Modules** and **Extensions** for [Agovena](https://github.com/milovd/Agovena) - the open-source modular commerce platform.
 
 Agovena Core stays generic. Install only the capabilities your shop needs.
 
@@ -9,21 +9,21 @@ Agovena Core stays generic. Install only the capabilities your shop needs.
 ```text
 optional-packages/
 ├── modules/
-│   ├── inventory/
-│   ├── shipping/
-│   ├── digital/
-│   ├── digital-delivery/
-│   ├── subscriptions/
-│   ├── provisioning/
-│   └── events/
+│ ├── inventory/
+│ ├── shipping/
+│ ├── digital/
+│ ├── digital-delivery/
+│ ├── subscriptions/
+│ ├── provisioning/
+│ └── events/
 └── extensions/
     ├── payments/
-    │   ├── mollie/
-    │   ├── stripe/
-    │   └── paypal/
+    │ ├── mollie/
+    │ ├── stripe/
+    │ └── paypal/
     ├── provisioning/
-    │   ├── pterodactyl/
-    │   └── proxmox/
+    │ ├── pterodactyl/
+    │ └── proxmox/
     └── shipping/
         └── postnl/
 ```
@@ -58,4 +58,4 @@ Core will discover packages from that path via `extra_module_paths` / `extra_ext
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

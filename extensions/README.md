@@ -5,7 +5,7 @@ Easy plugins that extend Agovena through public seams. Distinct from Modules.
 - **Modules** add platform capabilities/domains (events/tickets, inventory, shipping, digital, provisioning, …).
 - **Extensions** plug into existing seams without forking Core: payment/shipping/provisioning gateways, Admin tabs/pages/settings, cart/checkout requirements, invoice presentation.
 
-This is the Paymenter-style extensibility *problem* (register a package, hook in) expressed as Agovena contracts — not Filament, not their UI.
+This is the Paymenter-style extensibility *problem* (register a package, hook in) expressed as Agovena contracts - not Filament, not their UI.
 
 ## Distribution
 
@@ -48,9 +48,9 @@ Use `other` (or a matching provider category) for Admin/cart/invoice plugins tha
 
 From `Extension::register(ExtensionContext $context)`:
 
-1. `$context->admin()` — navigation, pages, settings, widgets, permissions (for example an invoice-layout tab)
-2. `$context->cartRequirements(...)` — contribute or extend checkout/cart requirements
-3. `$context->invoiceDocument('theme::invoices.document')` — override invoice HTML/PDF presentation
+1. `$context->admin()` - navigation, pages, settings, widgets, permissions (for example an invoice-layout tab)
+2. `$context->cartRequirements(...)` - contribute or extend checkout/cart requirements
+3. `$context->invoiceDocument('theme::invoices.document')` - override invoice HTML/PDF presentation
 4. `$context->paymentGateway(...)` / `provisioner(...)` / `shippingCarrier(...)`
 5. `$context->setting(...)` and `$context->health(...)`
 
@@ -68,7 +68,7 @@ Extensions must not bypass server-authoritative prices, webhook authority, or Ad
 1. Add `extensions/payments/{id}/extension.json` (or flat `extensions/{id}/`) with `category: payment_gateway`
 2. Implement `App\Agovena\Payments\Contracts\PaymentGateway`
 3. Register it from `Extension::register()` via `$context->paymentGateway(...)`
-4. Store secrets with `$context->setting(..., secret: true)` — encrypted, never redisplayed, never logged
+4. Store secrets with `$context->setting(..., secret: true)` - encrypted, never redisplayed, never logged
 5. Optional seams: `OffersCheckoutMethods`, `SynchronizesPayments`, `CancelsPayments`, `ChargesRecurringPayments`
 6. Return URLs are UX only. Verify provider status by fetching the provider resource (or the provider’s documented webhook model). Do not trust customer-supplied status query params.
 7. Tests must fake the provider HTTP/SDK. CI must not require live credentials.
@@ -78,7 +78,7 @@ Extensions must not bypass server-authoritative prices, webhook authority, or Ad
 1. `category: provisioning`
 2. Implement `Provisioner` plus optional `ProvisionerLifecycle`, `ProvisionerActions`, `ProvisionerPanel`, `ConfiguresProvisionedProducts`
 3. Register via `$context->provisioner(...)`
-4. Product mapping belongs in Extension-owned `provider_settings` on the provisionable capability — never Core columns such as vendor ids
+4. Product mapping belongs in Extension-owned `provider_settings` on the provisionable capability - never Core columns such as vendor ids
 5. Disable preserves Service Instance data
 
 ## Implementing a Shipping Extension

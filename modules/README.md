@@ -2,7 +2,7 @@
 
 Optional **business capabilities** that Agovena Core can enable independently.
 
-Modules are not merchant “store types”. A merchant may sell physical goods, digital keys, downloads, subscriptions, provisioned services, and event tickets in any compatible combination — including none of the optional Modules.
+Modules are not merchant “store types”. A merchant may sell physical goods, digital keys, downloads, subscriptions, provisioned services, and event tickets in any compatible combination - including none of the optional Modules.
 
 ## Two levels of understanding
 
@@ -35,8 +35,8 @@ True technical dependencies are declared in each Module’s `module.json`. Prese
 modules/{module-id}/
   module.json
   src/
-  database/migrations/   # optional
-  lang/                  # optional
+  database/migrations/ # optional
+  lang/ # optional
 ```
 
 Enable / disable from Admin → Modules. Disabling removes runtime capability and keeps Module data unless the operator explicitly purges.
