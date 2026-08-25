@@ -107,9 +107,14 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
             return PaymentInitiationResult::failed(__('paddle::messages.errors.create_failed'));
         }
 
+        $externalId = $transaction['id'] ?? null;
+        if (! is_string($externalId) || trim($externalId) === '') {
+            return PaymentInitiationResult::failed(__('paddle::messages.errors.create_failed'));
+        }
+
         return PaymentInitiationResult::redirect(
             url: $url,
-            externalId: (string) ($transaction['id'] ?? ''),
+            externalId: trim($externalId),
             metadata: ['provider_status' => (string) ($transaction['status'] ?? '')],
         );
     }
@@ -149,7 +154,9 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
         $status = $type === 'adjustment.updated'
             ? PaddleStatusMapper::map((string) ($data['status'] ?? ''), (string) ($data['action'] ?? ''))
             : PaddleStatusMapper::map((string) ($data['status'] ?? str_replace('transaction.', '', $type)));
-        $externalId = (string) ($data['id'] ?? $data['transaction_id'] ?? '');
+        $externalId = $type === 'adjustment.updated'
+            ? (string) ($data['transaction_id'] ?? $data['id'] ?? '')
+            : (string) ($data['id'] ?? $data['transaction_id'] ?? '');
 
         return new WebhookPayload(
             externalEventId: (string) $event['event_id'],
@@ -212,7 +219,8 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
 
     public function refund(RefundRequest $request): RefundResult
     {
-        if ($request->amount < (int) $request->payment->amount) {
+        if ($request->amount !== (int) $request->payment->amount
+            || strtoupper($request->currency) !== strtoupper((string) $request->payment->currency)) {
             return RefundResult::fail(__('paddle::messages.errors.partial_refund_unsupported'));
         }
 
@@ -233,7 +241,12 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
             return RefundResult::fail(__('paddle::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok((string) ($adjustment['id'] ?? ''));
+        $externalRefundId = $adjustment['id'] ?? null;
+        if (! is_string($externalRefundId) || ! str_starts_with($externalRefundId, 'adj_')) {
+            return RefundResult::fail(__('paddle::messages.errors.refund_failed'));
+        }
+
+        return RefundResult::ok($externalRefundId);
     }
 
     public function syncStatus(Payment $payment): Payment

@@ -179,8 +179,9 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
 
         $payment = $attempt->payment;
         $custom = is_array($payload->raw['custom'] ?? null) ? $payload->raw['custom'] : [];
-        if ($custom !== [] && (((string) ($custom['payment_id'] ?? '') !== (string) $payment->id
-            || (string) ($custom['order_id'] ?? '') !== (string) $payment->order_id))) {
+        if ($custom === []
+            || (string) ($custom['payment_id'] ?? '') !== (string) $payment->id
+            || (string) ($custom['order_id'] ?? '') !== (string) $payment->order_id) {
             return false;
         }
 
@@ -231,7 +232,8 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
 
     public function refund(RefundRequest $request): RefundResult
     {
-        if ($request->amount < (int) $request->payment->amount) {
+        if ($request->amount !== (int) $request->payment->amount
+            || strtoupper($request->currency) !== strtoupper((string) $request->payment->currency)) {
             return RefundResult::fail(__('tebex::messages.errors.partial_refund_unsupported'));
         }
 
@@ -247,7 +249,12 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
             return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok((string) ($refund['id'] ?? $refund['transaction_id'] ?? ''));
+        $externalRefundId = $refund['id'] ?? $refund['transaction_id'] ?? null;
+        if (! is_string($externalRefundId) || trim($externalRefundId) === '') {
+            return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
+        }
+
+        return RefundResult::ok(trim($externalRefundId));
     }
 
     public function syncStatus(Payment $payment): Payment
