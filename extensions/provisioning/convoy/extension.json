@@ -1,0 +1,61 @@
+{
+    "id": "convoy",
+    "name": "Convoy",
+    "version": "1.0.0",
+    "description": "First-party Agovena provisioning extension for Convoy.",
+    "author": "Agovena",
+    "category": "provisioning",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\Convoy\\ConvoyServiceProvider",
+    "dependencies": [],
+    "module_dependencies": [
+        "provisioning"
+    ],
+    "settings": [
+        {
+            "key": "api_url",
+            "label": "convoy::messages.settings.api_url",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "convoy::messages.settings.api_url_help"
+        },
+        {
+            "key": "api_token",
+            "label": "convoy::messages.settings.api_token",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "convoy::messages.settings.api_token_help"
+        },
+        {
+            "key": "organization_id",
+            "label": "convoy::messages.settings.organization_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "convoy::messages.settings.organization_id_help"
+        },
+        {
+            "key": "verify_tls",
+            "label": "convoy::messages.settings.verify_tls",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "convoy::messages.settings.verify_tls_help"
+        },
+        {
+            "key": "timeout",
+            "label": "convoy::messages.settings.timeout",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "20",
+            "help": "convoy::messages.settings.timeout_help"
+        }
+    ]
+}

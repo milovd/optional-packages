@@ -44,8 +44,8 @@ final class ProvisioningOrchestrator
             return $this->provisioning->fail($instance, $message);
         } catch (Throwable $exception) {
             report($exception);
-
-            return $this->provisioning->fail($instance, __('provisioning::errors.provider_failed'));
+            $this->provisioning->fail($instance, __('provisioning::errors.provider_failed'));
+            throw $exception;
         }
 
         return $this->applyPolled($instance, $updated);

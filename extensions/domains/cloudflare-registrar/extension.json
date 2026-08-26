@@ -1,0 +1,32 @@
+{
+    "id": "cloudflare-registrar",
+    "name": "Cloudflare Registrar",
+    "version": "1.0.0",
+    "description": "Domain availability checks and registrations through the Cloudflare Registrar API.",
+    "author": "Agovena",
+    "category": "domain_registrar",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\CloudflareRegistrar\\CloudflareRegistrarServiceProvider",
+    "module_dependencies": ["domains"],
+    "dependencies": [],
+    "settings": [
+        {
+            "key": "account_id",
+            "label": "cloudflare-registrar::messages.settings.account_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "cloudflare-registrar::messages.settings.account_id_help"
+        },
+        {
+            "key": "api_token",
+            "label": "cloudflare-registrar::messages.settings.api_token",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "cloudflare-registrar::messages.settings.api_token_help"
+        }
+    ]
+}

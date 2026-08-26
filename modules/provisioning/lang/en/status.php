@@ -9,4 +9,5 @@ return [
     'suspended' => 'Suspended',
     'terminated' => 'Terminated',
     'failed' => 'Failed',
+    'manual_review' => 'Manual review',
 ];

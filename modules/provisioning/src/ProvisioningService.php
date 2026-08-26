@@ -161,7 +161,7 @@ final class ProvisioningService implements PollsProvisionedInstances
 
     public function markProvisioning(ServiceInstance $instance): ServiceInstance
     {
-        if (! in_array($instance->status, [ServiceInstanceStatus::Pending, ServiceInstanceStatus::Failed], true)) {
+        if (! in_array($instance->status, [ServiceInstanceStatus::Pending, ServiceInstanceStatus::Failed, ServiceInstanceStatus::ManualReview], true)) {
             throw ValidationException::withMessages([
                 'instance' => __('provisioning::errors.cannot_provision'),
             ]);
@@ -245,6 +245,22 @@ final class ProvisioningService implements PollsProvisionedInstances
     public function fail(ServiceInstance $instance, string $message): ServiceInstance
     {
         $instance->status = ServiceInstanceStatus::Failed;
+        $instance->failed_at = now();
+        $instance->failure_message = $message;
+        $instance->save();
+
+        return $instance->fresh() ?? $instance;
+    }
+
+    public function markManualReview(ServiceInstance $instance, string $message): ServiceInstance
+    {
+        if (! in_array($instance->status, [ServiceInstanceStatus::Failed, ServiceInstanceStatus::Provisioning], true)) {
+            throw ValidationException::withMessages([
+                'instance' => __('provisioning::errors.cannot_review'),
+            ]);
+        }
+
+        $instance->status = ServiceInstanceStatus::ManualReview;
         $instance->failed_at = now();
         $instance->failure_message = $message;
         $instance->save();

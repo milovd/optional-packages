@@ -1,0 +1,61 @@
+{
+    "id": "cpanel",
+    "name": "CPanel",
+    "version": "1.0.0",
+    "description": "First-party Agovena provisioning extension for CPanel.",
+    "author": "Agovena",
+    "category": "provisioning",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\CPanel\\CPanelServiceProvider",
+    "dependencies": [],
+    "module_dependencies": [
+        "provisioning"
+    ],
+    "settings": [
+        {
+            "key": "api_url",
+            "label": "cpanel::messages.settings.api_url",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "cpanel::messages.settings.api_url_help"
+        },
+        {
+            "key": "api_token",
+            "label": "cpanel::messages.settings.api_token",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "cpanel::messages.settings.api_token_help"
+        },
+        {
+            "key": "api_username",
+            "label": "cpanel::messages.settings.api_username",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "cpanel::messages.settings.api_username_help"
+        },
+        {
+            "key": "verify_tls",
+            "label": "cpanel::messages.settings.verify_tls",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "cpanel::messages.settings.verify_tls_help"
+        },
+        {
+            "key": "timeout",
+            "label": "cpanel::messages.settings.timeout",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "20",
+            "help": "cpanel::messages.settings.timeout_help"
+        }
+    ]
+}

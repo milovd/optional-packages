@@ -9,4 +9,5 @@ return [
     'suspended' => 'Opgeschort',
     'terminated' => 'Beëindigd',
     'failed' => 'Mislukt',
+    'manual_review' => 'Handmatige controle',
 ];

@@ -6,7 +6,6 @@ namespace Agovena\Modules\Inventory\Listeners;
 
 use Agovena\Modules\Inventory\InventoryService;
 use App\Events\OrderCancelled;
-use App\Models\Product;
 
 final class RestockWhenOrderCancelled
 {
@@ -16,19 +15,6 @@ final class RestockWhenOrderCancelled
 
     public function handle(OrderCancelled $event): void
     {
-        $order = $event->order->loadMissing('items');
-
-        foreach ($order->items as $item) {
-            if ($item->product_id === null) {
-                continue;
-            }
-
-            $product = Product::query()->with('capabilities')->find($item->product_id);
-            if ($product === null) {
-                continue;
-            }
-
-            $this->inventory->increment($product, (int) $item->quantity);
-        }
+        $this->inventory->releaseForOrder($event->order);
     }
 }

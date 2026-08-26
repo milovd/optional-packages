@@ -81,6 +81,7 @@ final class ServiceInstance extends Model
             ServiceInstanceStatus::Provisioning,
             ServiceInstanceStatus::Suspended,
             ServiceInstanceStatus::Failed,
+            ServiceInstanceStatus::ManualReview,
         ], true);
     }
 

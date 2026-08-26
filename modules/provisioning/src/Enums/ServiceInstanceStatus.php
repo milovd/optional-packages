@@ -12,4 +12,5 @@ enum ServiceInstanceStatus: string
     case Suspended = 'suspended';
     case Terminated = 'terminated';
     case Failed = 'failed';
+    case ManualReview = 'manual_review';
 }

@@ -1,0 +1,11 @@
+{
+    "id": "domains",
+    "name": "Domains",
+    "version": "1.0.0",
+    "description": "Generic domain registration records and provider lifecycle seam.",
+    "author": "Agovena",
+    "agovena": "^0.0.1",
+    "group": "commerce",
+    "provider": "Agovena\\Modules\\Domains\\DomainsServiceProvider",
+    "dependencies": []
+}

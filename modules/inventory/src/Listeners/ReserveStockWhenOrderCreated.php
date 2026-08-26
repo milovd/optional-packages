@@ -24,11 +24,16 @@ final class ReserveStockWhenOrderCreated
             }
 
             $product = Product::query()->with('capabilities')->find($item->product_id);
-            if ($product === null) {
+            if ($product === null || ! $product->hasCapability('inventory')) {
                 continue;
             }
 
-            $this->inventory->decrement($product, (int) $item->quantity);
+            $this->inventory->reserve(
+                $product,
+                (int) $order->id,
+                (int) $item->id,
+                (int) $item->quantity,
+            );
         }
     }
 }

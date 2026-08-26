@@ -1,0 +1,61 @@
+{
+    "id": "virtualizor",
+    "name": "Virtualizor",
+    "version": "1.0.0",
+    "description": "First-party Agovena provisioning extension for Virtualizor.",
+    "author": "Agovena",
+    "category": "provisioning",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\Virtualizor\\VirtualizorServiceProvider",
+    "dependencies": [],
+    "module_dependencies": [
+        "provisioning"
+    ],
+    "settings": [
+        {
+            "key": "api_url",
+            "label": "virtualizor::messages.settings.api_url",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "virtualizor::messages.settings.api_url_help"
+        },
+        {
+            "key": "api_token",
+            "label": "virtualizor::messages.settings.api_token",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "virtualizor::messages.settings.api_token_help"
+        },
+        {
+            "key": "api_secret",
+            "label": "virtualizor::messages.settings.api_secret",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "virtualizor::messages.settings.api_secret_help"
+        },
+        {
+            "key": "verify_tls",
+            "label": "virtualizor::messages.settings.verify_tls",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "virtualizor::messages.settings.verify_tls_help"
+        },
+        {
+            "key": "timeout",
+            "label": "virtualizor::messages.settings.timeout",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "20",
+            "help": "virtualizor::messages.settings.timeout_help"
+        }
+    ]
+}

@@ -1,0 +1,52 @@
+{
+    "id": "plesk",
+    "name": "Plesk",
+    "version": "1.0.0",
+    "description": "First-party Agovena provisioning extension for Plesk.",
+    "author": "Agovena",
+    "category": "provisioning",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\Plesk\\PleskServiceProvider",
+    "dependencies": [],
+    "module_dependencies": [
+        "provisioning"
+    ],
+    "settings": [
+        {
+            "key": "api_url",
+            "label": "plesk::messages.settings.api_url",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "plesk::messages.settings.api_url_help"
+        },
+        {
+            "key": "api_token",
+            "label": "plesk::messages.settings.api_token",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "plesk::messages.settings.api_token_help"
+        },
+        {
+            "key": "verify_tls",
+            "label": "plesk::messages.settings.verify_tls",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "plesk::messages.settings.verify_tls_help"
+        },
+        {
+            "key": "timeout",
+            "label": "plesk::messages.settings.timeout",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "20",
+            "help": "plesk::messages.settings.timeout_help"
+        }
+    ]
+}

@@ -1,0 +1,59 @@
+{
+    "id": "namecheap-registrar",
+    "name": "Namecheap Registrar",
+    "version": "1.0.0",
+    "description": "Domain availability, registration and renewal through the Namecheap API.",
+    "author": "Agovena",
+    "category": "domain_registrar",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\NamecheapRegistrar\\NamecheapRegistrarServiceProvider",
+    "module_dependencies": ["domains"],
+    "dependencies": [],
+    "settings": [
+        {
+            "key": "api_user",
+            "label": "namecheap-registrar::messages.settings.api_user",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "namecheap-registrar::messages.settings.api_user_help"
+        },
+        {
+            "key": "api_key",
+            "label": "namecheap-registrar::messages.settings.api_key",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "namecheap-registrar::messages.settings.api_key_help"
+        },
+        {
+            "key": "username",
+            "label": "namecheap-registrar::messages.settings.username",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "namecheap-registrar::messages.settings.username_help"
+        },
+        {
+            "key": "client_ip",
+            "label": "namecheap-registrar::messages.settings.client_ip",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "namecheap-registrar::messages.settings.client_ip_help"
+        },
+        {
+            "key": "sandbox",
+            "label": "namecheap-registrar::messages.settings.sandbox",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "namecheap-registrar::messages.settings.sandbox_help"
+        }
+    ]
+}

@@ -1,0 +1,37 @@
+{
+    "id": "cloudflare-dns",
+    "name": "Cloudflare DNS",
+    "version": "1.0.0",
+    "description": "DNS zones and records through the Cloudflare API.",
+    "author": "Agovena",
+    "category": "domain_dns_provider",
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\CloudflareDns\\CloudflareDnsServiceProvider",
+    "module_dependencies": ["domains"],
+    "dependencies": [],
+    "autoload": {
+        "psr-4": {
+            "Agovena\\Extensions\\CloudflareDns\\": "src/"
+        }
+    },
+    "settings": [
+        {
+            "key": "account_id",
+            "label": "cloudflare-dns::messages.settings.account_id",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "cloudflare-dns::messages.settings.account_id_help"
+        },
+        {
+            "key": "api_token",
+            "label": "cloudflare-dns::messages.settings.api_token",
+            "type": "string",
+            "secret": true,
+            "required": true,
+            "default": "",
+            "help": "cloudflare-dns::messages.settings.api_token_help"
+        }
+    ]
+}

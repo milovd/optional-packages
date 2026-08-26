@@ -52,6 +52,16 @@ final class InstanceShow extends Component
         session()->flash('status', __('provisioning::admin.marked_provisioning'));
     }
 
+    public function markManualReview(ProvisioningService $provisioning): void
+    {
+        $this->authorize('provisioning.manage');
+        $this->instance = $provisioning->markManualReview(
+            $this->instance,
+            $this->instance->failure_message ?? __('provisioning::admin.manual_review_default'),
+        );
+        session()->flash('status', __('provisioning::admin.manual_reviewed'));
+    }
+
     public function retryProvisioning(ProvisioningOrchestrator $orchestrator): void
     {
         $this->authorize('provisioning.manage');
