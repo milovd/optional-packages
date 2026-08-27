@@ -16,12 +16,7 @@ final class EloquentProvisionedServiceResolver implements ResolvesProvisionedSer
     {
         $instance = ServiceInstance::query()
             ->whereKey($instanceId)
-            ->where(function ($query) use ($customer): void {
-                $query->where('customer_id', $customer->id)
-                    ->orWhere(function ($query) use ($customer): void {
-                        $query->whereNull('customer_id')->where('customer_email', $customer->email);
-                    });
-            })
+            ->where('customer_id', $customer->id)
             ->first();
 
         return $instance instanceof ServiceInstance ? self::info($instance) : null;
@@ -32,7 +27,9 @@ final class EloquentProvisionedServiceResolver implements ResolvesProvisionedSer
         $meta = $instance->meta ?? [];
         if ($instance->provisioning_server_id !== null) {
             $meta['server_settings_required'] = true;
-            $server = ProvisioningServer::query()->find($instance->provisioning_server_id);
+            $server = ProvisioningServer::query()
+                ->where('is_active', true)
+                ->find($instance->provisioning_server_id);
             if ($server !== null && $server->is_active && $server->provider_key === $instance->provider_key) {
                 $meta['server_settings'] = $server->settings;
                 unset($meta['server_settings_unavailable']);

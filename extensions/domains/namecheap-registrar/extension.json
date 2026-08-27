@@ -5,6 +5,7 @@
     "description": "Domain availability, registration and renewal through the Namecheap API.",
     "author": "Agovena",
     "category": "domain_registrar",
+    "production_ready": false,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\NamecheapRegistrar\\NamecheapRegistrarServiceProvider",
     "module_dependencies": ["domains"],

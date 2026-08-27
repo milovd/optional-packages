@@ -5,6 +5,7 @@
     "description": "DNS zones and records through the Cloudflare API.",
     "author": "Agovena",
     "category": "domain_dns_provider",
+    "production_ready": false,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\CloudflareDns\\CloudflareDnsServiceProvider",
     "module_dependencies": ["domains"],

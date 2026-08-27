@@ -59,6 +59,13 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
             return;
         }
 
+        $model = ServiceInstance::query()->find($instance->id);
+        if ($model !== null && is_string($model->external_ref) && trim($model->external_ref) !== '') {
+            throw ValidationException::withMessages([
+                'instance' => $this->message('errors.not_provisioned'),
+            ]);
+        }
+
         try {
             $existing = $api->findServerByExternalId($externalId);
             if ($existing !== null) {
@@ -386,14 +393,16 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
 
     private function mappingId(ServiceInstanceInfo $instance): ?string
     {
-        if ($instance->externalRef !== null && trim($instance->externalRef) !== '') {
-            return trim($instance->externalRef);
+        $model = ServiceInstance::query()->find($instance->id);
+        $meta = is_array($model?->meta) ? $model->meta : $instance->meta;
+        $mapping = $meta['provider_mapping'] ?? null;
+        if (! is_array($mapping)) {
+            return null;
         }
 
-        $model = ServiceInstance::query()->find($instance->id);
-        $externalRef = $model?->external_ref;
+        $providerId = $mapping['provider_id'] ?? null;
 
-        return is_string($externalRef) && trim($externalRef) !== '' ? trim($externalRef) : null;
+        return is_scalar($providerId) && trim((string) $providerId) !== '' ? trim((string) $providerId) : null;
     }
 
     /** @param array<string, mixed> $server */
@@ -404,10 +413,17 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
             return $externalId;
         }
 
-        $providerId = $this->providerId($server)
-            ?? (is_string($model->external_ref) && trim($model->external_ref) !== '' ? trim($model->external_ref) : $externalId);
+        $providerId = $this->providerId($server, $externalId);
+        if ($providerId === null) {
+            throw ValidationException::withMessages([
+                'instance' => $this->message('errors.not_provisioned'),
+            ]);
+        }
         $meta = is_array($model->meta) ? $model->meta : [];
-        $meta['provider_mapping'] = array_intersect_key($server, array_flip([
+        if (is_string($model->external_ref) && trim($model->external_ref) !== '') {
+            $meta['source_external_ref'] ??= trim($model->external_ref);
+        }
+        $meta['provider_mapping'] = ['provider_id' => $providerId] + array_intersect_key($server, array_flip([
             'id', 'external_id', 'uuid', 'identifier', 'name', 'status', 'management_url',
         ]));
         $model->forceFill([
@@ -421,19 +437,26 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
 
     private function forgetMapping(int $instanceId): void
     {
-        ServiceInstance::query()->whereKey($instanceId)->update([
-            'external_ref' => null,
-            'terminated_at' => now(),
-        ]);
+        $model = ServiceInstance::query()->find($instanceId);
+        if ($model === null) {
+            return;
+        }
+        $meta = is_array($model->meta) ? $model->meta : [];
+        unset($meta['provider_mapping']);
+        $model->forceFill(['external_ref' => null, 'meta' => $meta, 'terminated_at' => now()])->save();
     }
 
     /** @param array<string, mixed> $server */
-    private function providerId(array $server): ?string
+    private function providerId(array $server, string $externalId): ?string
     {
-        foreach (['id', 'external_id', 'uuid', 'identifier', 'server_id', 'resource_id'] as $key) {
+        foreach (['id', 'uuid', 'identifier', 'server_id', 'resource_id'] as $key) {
             if (isset($server[$key]) && trim((string) $server[$key]) !== '') {
                 return (string) $server[$key];
             }
+        }
+
+        if (isset($server['external_id']) && trim((string) $server['external_id']) !== '' && (string) $server['external_id'] !== $externalId) {
+            return (string) $server['external_id'];
         }
 
         return null;

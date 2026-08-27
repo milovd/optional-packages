@@ -5,6 +5,7 @@
     "description": "First-party Paddle Billing gateway for hosted checkout, signed webhooks, and refunds.",
     "author": "Agovena",
     "category": "payment_gateway",
+    "production_ready": false,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Paddle\\PaddleServiceProvider",
     "dependencies": [],

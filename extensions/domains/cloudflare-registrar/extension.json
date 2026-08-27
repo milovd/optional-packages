@@ -5,6 +5,7 @@
     "description": "Domain availability checks and registrations through the Cloudflare Registrar API.",
     "author": "Agovena",
     "category": "domain_registrar",
+    "production_ready": false,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\CloudflareRegistrar\\CloudflareRegistrarServiceProvider",
     "module_dependencies": ["domains"],

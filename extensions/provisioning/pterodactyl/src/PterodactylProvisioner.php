@@ -441,7 +441,7 @@ final class PterodactylProvisioner implements ConfiguresProvisionedProducts, Con
         int $locationId,
         int $eggId,
     ): array {
-        $userId = (int) $this->settings->get('pterodactyl', 'user_id', 0);
+        $userId = (int) $this->connectionSetting($instance, 'user_id', 0);
         $dockerImage = trim((string) ($settings['docker_image'] ?? ''));
         if ($dockerImage === '') {
             $dockerImage = (string) ($egg['docker_image'] ?? '');
@@ -573,6 +573,9 @@ final class PterodactylProvisioner implements ConfiguresProvisionedProducts, Con
             $settings = $this->connectionSettings($instance);
             if (array_key_exists($key, $settings)) {
                 return $settings[$key];
+            }
+            if (($instance->meta['server_settings_required'] ?? false) === true) {
+                return $default;
             }
         }
 

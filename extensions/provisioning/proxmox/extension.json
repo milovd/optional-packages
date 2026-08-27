@@ -5,6 +5,7 @@
     "description": "Provisioning Extension for Proxmox VE virtual machines (clone, lifecycle, sync).",
     "author": "Agovena",
     "category": "provisioning",
+    "production_ready": false,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Proxmox\\ProxmoxServiceProvider",
     "dependencies": [],
