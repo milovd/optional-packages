@@ -164,10 +164,11 @@ final class ProvisioningOrchestrator
 
     private function applyPolled(ServiceInstance $instance, ServiceInstanceInfo $updated): ServiceInstance
     {
+        $externalRef = $this->preservedExternalReference($instance, $updated);
         $instance = $this->provisioning->updateTracking(
             $instance,
             $updated->providerKey,
-            $updated->externalRef,
+            $externalRef,
         );
 
         $meta = $instance->meta ?? [];
@@ -180,7 +181,7 @@ final class ProvisioningOrchestrator
             'active' => $instance->status === ServiceInstanceStatus::Active
                 ? $instance
                 : ($instance->canActivate()
-                    ? $this->provisioning->activate($instance, $updated->externalRef)
+                    ? $this->provisioning->activate($instance, $externalRef)
                     : $instance),
             'suspended' => $instance->status === ServiceInstanceStatus::Suspended
                 ? $instance
@@ -197,5 +198,20 @@ final class ProvisioningOrchestrator
                     : $instance),
             default => $instance,
         };
+    }
+
+    private function preservedExternalReference(ServiceInstance $instance, ServiceInstanceInfo $updated): ?string
+    {
+        if ($updated->externalRef === null || trim($updated->externalRef) === '') {
+            return null;
+        }
+
+        $current = is_string($instance->external_ref) ? trim($instance->external_ref) : '';
+        $synthetic = 'agovena-'.$updated->providerKey.'-'.$instance->id;
+        if ($current !== '' && $updated->externalRef === $synthetic && $current !== $synthetic) {
+            return $current;
+        }
+
+        return $updated->externalRef;
     }
 }

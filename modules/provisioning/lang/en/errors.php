@@ -9,4 +9,5 @@ return [
     'cannot_suspend' => 'Only active services can be suspended.',
     'cannot_unsuspend' => 'Only suspended services can be unsuspended.',
     'provider_failed' => 'The provisioning provider could not complete this action.',
+    'server_unavailable' => 'The selected provisioning server is unavailable. This service requires manual review.',
 ];

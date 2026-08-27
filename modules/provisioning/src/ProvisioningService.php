@@ -52,11 +52,18 @@ final class ProvisioningService implements PollsProvisionedInstances
             $providerKey = isset($config['provider_key']) && is_string($config['provider_key']) && $config['provider_key'] !== ''
                 ? $config['provider_key']
                 : null;
+            $serverSelectionProvided = array_key_exists('server_id', $config)
+                && $config['server_id'] !== null
+                && $config['server_id'] !== '';
             $serverId = is_numeric($config['server_id'] ?? null) ? (int) $config['server_id'] : null;
             $server = $serverId !== null
                 ? ProvisioningServer::query()->where('is_active', true)->find($serverId)
                 : null;
-            if ($server !== null) {
+            $serverUnavailable = $serverSelectionProvided
+                && ($server === null || ($providerKey !== null && $server->provider_key !== $providerKey));
+            if ($serverUnavailable) {
+                $providerKey = null;
+            } elseif ($server !== null) {
                 $providerKey = $server->provider_key;
             }
             $providerSettings = is_array($config['provider_settings'] ?? null)
@@ -80,7 +87,7 @@ final class ProvisioningService implements PollsProvisionedInstances
                     'customer_email' => $order->customer_email,
                     'customer_name' => $order->customer_name,
                     'subscription_id' => $subscriptionId,
-                    'status' => ServiceInstanceStatus::Pending,
+                    'status' => $serverUnavailable ? ServiceInstanceStatus::ManualReview : ServiceInstanceStatus::Pending,
                     'provider_key' => $providerKey,
                     'provisioning_server_id' => $server?->id,
                     'meta' => [
@@ -90,6 +97,8 @@ final class ProvisioningService implements PollsProvisionedInstances
                         'options_snapshot' => $item->options_snapshot ?? [],
                         'provider_settings' => $providerSettings,
                     ],
+                    'failed_at' => $serverUnavailable ? now() : null,
+                    'failure_message' => $serverUnavailable ? __('provisioning::errors.server_unavailable') : null,
                 ]);
             }
         }

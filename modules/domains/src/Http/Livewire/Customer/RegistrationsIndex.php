@@ -17,10 +17,7 @@ final class RegistrationsIndex extends Component
         $customer = authenticated_customer();
         $registrations = DomainRegistration::query()
             ->with('product')
-            ->where(function ($query) use ($customer): void {
-                $query->where('customer_id', $customer->id)
-                    ->orWhere('customer_email', $customer->email);
-            })
+            ->where('customer_id', $customer->id)
             ->orderByDesc('id')
             ->get();
         $theme = $themes->active();

@@ -60,9 +60,8 @@ final class DomainsModule implements Module
             static function (Customer $customer): AccountOverviewCard {
                 $count = DomainRegistration::query()
                     ->where(function ($query) use ($customer): void {
-                        $query->where('customer_id', $customer->id)
-                            ->orWhere('customer_email', $customer->email);
-                    })
+                            $query->where('customer_id', $customer->id);
+                        })
                     ->where('status', 'active')
                     ->count();
 

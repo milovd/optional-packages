@@ -152,9 +152,9 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
             ]);
         }
 
-        $this->storeMapping($instance->id, $server, $externalId);
+        $providerId = $this->storeMapping($instance->id, $server, $externalId);
 
-        return $this->withStatus($instance, $this->mapLifecycleStatus($server), $externalId);
+        return $this->withStatus($instance, $this->mapLifecycleStatus($server), $providerId);
     }
 
     /** @return list<ProvisionerAction> */
@@ -329,7 +329,16 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
 
     private function apiFor(ServiceInstanceInfo $instance): ServerApi
     {
-        return $this->api->withConnection($this->connectionSettings($instance));
+        $settings = $this->connectionSettings($instance);
+        foreach ($this->requiredConnectionKeys() as $key) {
+            if (trim((string) ($settings[$key] ?? '')) === '') {
+                throw ValidationException::withMessages([
+                    'instance' => $this->message('errors.not_configured'),
+                ]);
+            }
+        }
+
+        return $this->api->withConnection($settings);
     }
 
     /** @return array<string, mixed> */
@@ -344,6 +353,10 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     private function connectionSettings(ServiceInstanceInfo $instance): array
     {
         $settings = $instance->meta['server_settings'] ?? [];
+
+        if (($instance->meta['server_settings_required'] ?? false) === true) {
+            return is_array($settings) ? $settings : [];
+        }
 
         return is_array($settings) && $settings !== [] ? $settings : $this->repositoryConnectionSettings();
     }
@@ -384,14 +397,15 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     }
 
     /** @param array<string, mixed> $server */
-    private function storeMapping(int $instanceId, array $server, string $externalId): void
+    private function storeMapping(int $instanceId, array $server, string $externalId): string
     {
         $model = ServiceInstance::query()->find($instanceId);
         if ($model === null) {
-            return;
+            return $externalId;
         }
 
-        $providerId = $this->providerId($server) ?? $externalId;
+        $providerId = $this->providerId($server)
+            ?? (is_string($model->external_ref) && trim($model->external_ref) !== '' ? trim($model->external_ref) : $externalId);
         $meta = is_array($model->meta) ? $model->meta : [];
         $meta['provider_mapping'] = array_intersect_key($server, array_flip([
             'id', 'external_id', 'uuid', 'identifier', 'name', 'status', 'management_url',
@@ -401,6 +415,8 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
             'external_ref' => $providerId,
             'meta' => $meta,
         ])->save();
+
+        return $providerId;
     }
 
     private function forgetMapping(int $instanceId): void

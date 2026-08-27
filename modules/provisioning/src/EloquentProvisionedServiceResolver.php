@@ -31,9 +31,14 @@ final class EloquentProvisionedServiceResolver implements ResolvesProvisionedSer
     {
         $meta = $instance->meta ?? [];
         if ($instance->provisioning_server_id !== null) {
+            $meta['server_settings_required'] = true;
             $server = ProvisioningServer::query()->find($instance->provisioning_server_id);
             if ($server !== null && $server->is_active && $server->provider_key === $instance->provider_key) {
                 $meta['server_settings'] = $server->settings;
+                unset($meta['server_settings_unavailable']);
+            } else {
+                $meta['server_settings'] = [];
+                $meta['server_settings_unavailable'] = true;
             }
         }
 
