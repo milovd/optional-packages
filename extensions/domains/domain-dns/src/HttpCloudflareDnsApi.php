@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Agovena\Extensions\CloudflareDns;
+namespace Agovena\Extensions\DomainDns;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use Illuminate\Support\Facades\Http;
@@ -81,7 +81,7 @@ final class HttpCloudflareDnsApi implements CloudflareDnsApi
     /** @param array<string, mixed> $query @param array<string, mixed> $payload @return array<string, mixed> */
     private function request(string $method, string $path, array $query = [], array $payload = []): array
     {
-        $token = trim((string) $this->settings->get('cloudflare-dns', 'api_token', ''));
+        $token = trim((string) $this->settings->get('domain-dns', 'cloudflare_api_token', ''));
         if ($this->accountId() === '' || $token === '') {
             throw new RuntimeException('Cloudflare DNS is not configured.');
         }
@@ -127,7 +127,7 @@ final class HttpCloudflareDnsApi implements CloudflareDnsApi
 
     private function accountId(): string
     {
-        return trim((string) $this->settings->get('cloudflare-dns', 'account_id', ''));
+        return trim((string) $this->settings->get('domain-dns', 'cloudflare_account_id', ''));
     }
 
     private function reference(string $reference): string

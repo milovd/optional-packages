@@ -1,8 +1,8 @@
 {
     "id": "domains",
-    "name": "Domains",
+    "name": "Domain",
     "version": "1.0.0",
-    "description": "Generic domain registration records and provider lifecycle seam.",
+    "description": "One domain surface for registration, renewals and DNS management.",
     "author": "Agovena",
     "agovena": "^0.0.1",
     "group": "commerce",

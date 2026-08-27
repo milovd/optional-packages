@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'title' => 'Domains',
-    'lede' => 'Review domain registrations and provider status.',
+    'title' => 'Domain',
+    'lede' => 'Manage registrations, renewals and DNS records in one domain workspace.',
     'empty' => 'No domain registrations found.',
     'filter_status' => 'Filter by status',
     'all_statuses' => 'All statuses',

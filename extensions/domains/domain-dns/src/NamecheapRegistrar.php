@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Agovena\Extensions\NamecheapRegistrar;
+namespace Agovena\Extensions\DomainDns;
 
 use Agovena\Modules\Domains\Contracts\DomainRegistrar;
 use Agovena\Modules\Domains\Models\DomainRegistration;

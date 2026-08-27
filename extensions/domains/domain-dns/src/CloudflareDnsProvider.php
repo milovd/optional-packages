@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Agovena\Extensions\CloudflareDns;
+namespace Agovena\Extensions\DomainDns;
 
 use Agovena\Modules\Domains\Contracts\DomainDnsProvider;
 use Agovena\Modules\Domains\Models\DomainRegistration;

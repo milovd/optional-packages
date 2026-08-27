@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Agovena\Extensions\CloudflareRegistrar;
+namespace Agovena\Extensions\DomainDns;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use Illuminate\Support\Facades\Http;
@@ -33,8 +33,8 @@ final class HttpCloudflareApi implements CloudflareApi
     /** @return array<string, mixed> */
     private function post(string $path, array $payload): array
     {
-        $accountId = trim((string) $this->settings->get('cloudflare-registrar', 'account_id', ''));
-        $apiToken = trim((string) $this->settings->get('cloudflare-registrar', 'api_token', ''));
+        $accountId = trim((string) $this->settings->get('domain-dns', 'cloudflare_account_id', ''));
+        $apiToken = trim((string) $this->settings->get('domain-dns', 'cloudflare_api_token', ''));
         if ($accountId === '' || $apiToken === '') {
             throw new RuntimeException('Cloudflare Registrar is not configured.');
         }

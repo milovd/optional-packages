@@ -24,9 +24,7 @@ extensions/
     paddle/
     tebex/
   domains/
-    cloudflare-registrar/
-    cloudflare-dns/
-    namecheap-registrar/
+    domain-dns/
   provisioning/
     cpanel/
     convoy/

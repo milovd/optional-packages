@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Agovena\Extensions\NamecheapRegistrar;
+namespace Agovena\Extensions\DomainDns;
 
 interface NamecheapApi
 {

@@ -24,9 +24,7 @@ optional-packages/
     │   ├── paddle/
     │   └── tebex/
     ├── domains/
-    │   ├── cloudflare-registrar/
-    │   ├── cloudflare-dns/
-    │   └── namecheap-registrar/
+    │   └── domain-dns/
     ├── provisioning/
     │   ├── pterodactyl/
     │   ├── proxmox/

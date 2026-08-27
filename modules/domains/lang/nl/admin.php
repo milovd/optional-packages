@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'title' => 'Domeinen',
-    'lede' => 'Bekijk domeinregistraties en providerstatus.',
+    'title' => 'Domein',
+    'lede' => 'Beheer registraties, renewals en DNS-records vanuit één domeinwerkruimte.',
     'empty' => 'Geen domeinregistraties gevonden.',
     'filter_status' => 'Filter op status',
     'all_statuses' => 'Alle statussen',
