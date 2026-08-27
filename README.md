@@ -18,12 +18,25 @@ optional-packages/
 │ └── events/
 └── extensions/
     ├── payments/
-    │ ├── mollie/
-    │ ├── stripe/
-    │ └── paypal/
+    │   ├── mollie/
+    │   ├── stripe/
+    │   ├── paypal/
+    │   ├── paddle/
+    │   └── tebex/
+    ├── domains/
+    │   ├── cloudflare-registrar/
+    │   ├── cloudflare-dns/
+    │   └── namecheap-registrar/
     ├── provisioning/
-    │ ├── pterodactyl/
-    │ └── proxmox/
+    │   ├── pterodactyl/
+    │   ├── proxmox/
+    │   ├── cpanel/
+    │   ├── convoy/
+    │   ├── directadmin/
+    │   ├── enhance/
+    │   ├── plesk/
+    │   ├── virtfusion/
+    │   └── virtualizor/
     └── shipping/
         └── postnl/
 ```
@@ -41,6 +54,11 @@ Package identity comes from each package manifest (`module.json` or `extension.j
 2. In **Admin → Modules** or **Admin → Extensions**, use **Install** on an available package.
 
 3. Agovena clones this repository (cached under `storage/app/packages/monorepo-cache/`), copies the mapped subdirectory into `storage/app/packages/modules/{id}` or `storage/app/packages/extensions/{id}`, registers autoloading, and runs the package lifecycle (`install` → `enable`).
+
+The catalog includes the Domains module, independent registrar and DNS
+extensions, five payment gateways, nine provisioning adapters, and the PostNL
+shipping adapter. Provider manifests remain explicitly non-production-ready
+until the corresponding sandbox acceptance checklist has been completed.
 
 ## Updates
 

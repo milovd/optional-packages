@@ -21,6 +21,12 @@ extensions/
     mollie/
     stripe/
     paypal/
+    paddle/
+    tebex/
+  domains/
+    cloudflare-registrar/
+    cloudflare-dns/
+    namecheap-registrar/
   provisioning/
     cpanel/
     convoy/
