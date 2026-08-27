@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Agovena\Extensions\DomainDns;
+namespace Agovena\Extensions\CloudflareDomain;
 
 interface CloudflareDnsApi
 {

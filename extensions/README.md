@@ -24,7 +24,8 @@ extensions/
     paddle/
     tebex/
   domains/
-    domain-dns/
+    cloudflare-domain/
+    namecheap-domain/
   provisioning/
     cpanel/
     convoy/
@@ -51,7 +52,7 @@ Lifecycle: discover → install → enable / disable → uninstall. Disable pres
 
 ## Categories
 
-Manifest `category` values: `payment_gateway`, `provisioning`, `shipping`, `authentication`, `storage`, `notifications`, `analytics`, `tax`, `other`
+Manifest `category` values: `payment_gateway`, `provisioning`, `shipping`, `domain`, `authentication`, `storage`, `notifications`, `analytics`, `tax`, `other`
 
 Use `other` (or a matching provider category) for Admin/cart/invoice plugins that are not a gateway. Filesystem folder names for first-party packages use friendlier labels where useful (`payments/` for `payment_gateway`). Folder name is convenience only.
 

@@ -1,0 +1,65 @@
+{
+    "id": "namecheap-domain",
+    "name": "Namecheap Domains",
+    "version": "1.0.0",
+    "description": "Namecheap domain availability, registration and renewal management in one provider integration.",
+    "author": "Agovena",
+    "category": "domain",
+    "production_ready": false,
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\NamecheapDomain\\NamecheapDomainServiceProvider",
+    "module_dependencies": ["domains"],
+    "dependencies": [],
+    "autoload": {
+        "psr-4": {
+            "Agovena\\Extensions\\NamecheapDomain\\": "src/"
+        }
+    },
+    "settings": [
+        {
+            "key": "api_user",
+            "label": "namecheap-domain::messages.settings.api_user",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "namecheap-domain::messages.settings.api_user_help"
+        },
+        {
+            "key": "api_key",
+            "label": "namecheap-domain::messages.settings.api_key",
+            "type": "string",
+            "secret": true,
+            "required": false,
+            "default": "",
+            "help": "namecheap-domain::messages.settings.api_key_help"
+        },
+        {
+            "key": "username",
+            "label": "namecheap-domain::messages.settings.username",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "namecheap-domain::messages.settings.username_help"
+        },
+        {
+            "key": "client_ip",
+            "label": "namecheap-domain::messages.settings.client_ip",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "namecheap-domain::messages.settings.client_ip_help"
+        },
+        {
+            "key": "sandbox",
+            "label": "namecheap-domain::messages.settings.sandbox",
+            "type": "boolean",
+            "secret": false,
+            "required": false,
+            "default": true,
+            "help": "namecheap-domain::messages.settings.sandbox_help"
+        }
+    ]
+}

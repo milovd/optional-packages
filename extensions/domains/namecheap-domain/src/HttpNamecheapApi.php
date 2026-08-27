@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Agovena\Extensions\DomainDns;
+namespace Agovena\Extensions\NamecheapDomain;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use Illuminate\Support\Facades\Http;
@@ -76,10 +76,10 @@ final class HttpNamecheapApi implements NamecheapApi
     /** @param array<string, scalar> $parameters */
     private function request(string $command, array $parameters): SimpleXMLElement
     {
-        $apiUser = trim((string) $this->settings->get('domain-dns', 'namecheap_api_user', ''));
-        $apiKey = trim((string) $this->settings->get('domain-dns', 'namecheap_api_key', ''));
-        $username = trim((string) $this->settings->get('domain-dns', 'namecheap_username', ''));
-        $clientIp = trim((string) $this->settings->get('domain-dns', 'namecheap_client_ip', ''));
+        $apiUser = trim((string) $this->settings->get('namecheap-domain', 'api_user', ''));
+        $apiKey = trim((string) $this->settings->get('namecheap-domain', 'api_key', ''));
+        $username = trim((string) $this->settings->get('namecheap-domain', 'username', ''));
+        $clientIp = trim((string) $this->settings->get('namecheap-domain', 'client_ip', ''));
         if ($apiUser === '' || $apiKey === '' || $username === '' || $clientIp === '') {
             throw new RuntimeException('Namecheap Registrar is not configured.');
         }
@@ -91,7 +91,7 @@ final class HttpNamecheapApi implements NamecheapApi
             'Command' => $command,
             'ClientIp' => $clientIp,
         ], $parameters);
-        $baseUrl = filter_var($this->settings->get('domain-dns', 'namecheap_sandbox', true), FILTER_VALIDATE_BOOLEAN)
+        $baseUrl = filter_var($this->settings->get('namecheap-domain', 'sandbox', true), FILTER_VALIDATE_BOOLEAN)
             ? self::SANDBOX_URL
             : self::PRODUCTION_URL;
 

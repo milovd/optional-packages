@@ -24,7 +24,8 @@ optional-packages/
     │   ├── paddle/
     │   └── tebex/
     ├── domains/
-    │   └── domain-dns/
+    │   ├── cloudflare-domain/
+    │   └── namecheap-domain/
     ├── provisioning/
     │   ├── pterodactyl/
     │   ├── proxmox/
@@ -53,9 +54,7 @@ Package identity comes from each package manifest (`module.json` or `extension.j
 
 3. Agovena clones this repository (cached under `storage/app/packages/monorepo-cache/`), copies the mapped subdirectory into `storage/app/packages/modules/{id}` or `storage/app/packages/extensions/{id}`, registers autoloading, and runs the package lifecycle (`install` → `enable`).
 
-The catalog includes the Domains module, independent registrar and DNS
-extensions, five payment gateways, nine provisioning adapters, and the PostNL
-shipping adapter. Provider manifests remain explicitly non-production-ready
+The catalog includes the Domains module, one integrated Cloudflare domain extension for Cloudflare Registrar plus DNS management, one separate Namecheap domain extension for registration and renewal management, five payment gateways, nine provisioning adapters, and the PostNL shipping adapter. Provider manifests remain explicitly non-production-ready
 until the corresponding sandbox acceptance checklist has been completed.
 
 ## Updates

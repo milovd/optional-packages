@@ -1,0 +1,38 @@
+{
+    "id": "cloudflare-domain",
+    "name": "Cloudflare Domains",
+    "version": "1.0.0",
+    "description": "Cloudflare domain availability, registration and DNS management in one provider integration.",
+    "author": "Agovena",
+    "category": "domain",
+    "production_ready": false,
+    "agovena": "^0.0.1",
+    "provider": "Agovena\\Extensions\\CloudflareDomain\\CloudflareDomainServiceProvider",
+    "module_dependencies": ["domains"],
+    "dependencies": [],
+    "autoload": {
+        "psr-4": {
+            "Agovena\\Extensions\\CloudflareDomain\\": "src/"
+        }
+    },
+    "settings": [
+        {
+            "key": "account_id",
+            "label": "cloudflare-domain::messages.settings.account_id",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "cloudflare-domain::messages.settings.account_id_help"
+        },
+        {
+            "key": "api_token",
+            "label": "cloudflare-domain::messages.settings.api_token",
+            "type": "string",
+            "secret": true,
+            "required": false,
+            "default": "",
+            "help": "cloudflare-domain::messages.settings.api_token_help"
+        }
+    ]
+}
