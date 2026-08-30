@@ -53,5 +53,7 @@ return [
         'timeout' => 'The provider request timed out.',
         'unreachable' => 'The provider could not be reached.',
         'malformed' => 'The provider returned an invalid response.',
+        'capacity_unsupported' => 'This provider does not expose a verified capacity check, so checkout is disabled for this product.',
+        'out_of_stock' => 'This product is temporarily unavailable because the requested capacity is full.',
     ],
 ];

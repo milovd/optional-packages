@@ -34,9 +34,6 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     /** @return list<ExtensionSettingDefinition> */
     abstract public function serverSettings(): array;
 
-    /** @return list<ExtensionSettingDefinition> */
-    abstract public function productSettings(): array;
-
     /** @param array<string, mixed> $settings */
     public function testServer(array $settings): HealthResult
     {
@@ -51,38 +48,8 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
 
     public function provision(ServiceInstanceInfo $instance): void
     {
-        $this->assertConfigured($instance);
-        $api = $this->apiFor($instance);
-        $externalId = $this->externalId($instance->id);
-
-        if ($this->mappingId($instance) !== null) {
-            return;
-        }
-
-        $model = ServiceInstance::query()->find($instance->id);
-        if ($model !== null && is_string($model->external_ref) && trim($model->external_ref) !== '') {
-            throw ValidationException::withMessages([
-                'instance' => $this->message('errors.not_provisioned'),
-            ]);
-        }
-
-        try {
-            $existing = $api->findServerByExternalId($externalId);
-            if ($existing !== null) {
-                $this->storeMapping($instance->id, $existing, $externalId);
-
-                return;
-            }
-
-            $created = $api->createServer($this->buildCreatePayload($instance, $this->providerSettings($instance), $externalId));
-            $this->storeMapping($instance->id, $created, $externalId);
-        } catch (ServerProviderException $exception) {
-            throw ValidationException::withMessages([
-                'instance' => $this->message($exception->errorKey),
-            ]);
-        }
+        $this->assertUnsupported();
     }
-
     public function poll(ServiceInstanceInfo $instance): ServiceInstanceInfo
     {
         return $this->syncStatus($instance);
@@ -91,77 +58,38 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     public function activate(ServiceInstanceInfo $instance): void
     {
         unset($instance);
+        $this->assertUnsupported();
     }
 
     public function suspend(ServiceInstanceInfo $instance): void
     {
-        $this->mutate($instance, function (string $externalId, ServerApi $api): void {
-            $api->suspend($externalId);
-        });
+        unset($instance);
+        $this->assertUnsupported();
     }
 
     public function unsuspend(ServiceInstanceInfo $instance): void
     {
-        $this->mutate($instance, function (string $externalId, ServerApi $api): void {
-            $api->unsuspend($externalId);
-        });
+        unset($instance);
+        $this->assertUnsupported();
     }
 
     public function terminate(ServiceInstanceInfo $instance): void
     {
-        $externalId = $this->mappingId($instance);
-        if ($externalId === null) {
-            return;
-        }
-
-        try {
-            $this->apiFor($instance)->terminate($externalId);
-        } catch (ServerProviderException $exception) {
-            if ($exception->status !== 404) {
-                throw ValidationException::withMessages([
-                    'instance' => $this->message($exception->errorKey),
-                ]);
-            }
-        }
-
-        $this->forgetMapping($instance->id);
+        unset($instance);
+        $this->assertUnsupported();
     }
 
-    public function changePlan(ServiceInstanceInfo $instance, string $plan): void
+    public function changePlan(ServiceInstanceInfo $instance, string|array $plan): void
     {
-        $externalId = $this->requireMapping($instance);
-
-        try {
-            $this->apiFor($instance)->changePlan($externalId, $this->buildPlanPayload($instance, $plan));
-        } catch (ServerProviderException $exception) {
-            throw ValidationException::withMessages([
-                'instance' => $this->message($exception->errorKey),
-            ]);
-        }
+        unset($instance, $plan);
+        $this->assertUnsupported();
     }
 
     public function syncStatus(ServiceInstanceInfo $instance): ServiceInstanceInfo
     {
-        $externalId = $this->mappingId($instance);
-        if ($externalId === null) {
-            return $instance;
-        }
+        $this->assertUnsupported();
 
-        try {
-            $server = $this->apiFor($instance)->getServer($externalId);
-        } catch (ServerProviderException $exception) {
-            if ($exception->status === 404) {
-                return $this->withStatus($instance, 'terminated', $externalId);
-            }
-
-            throw ValidationException::withMessages([
-                'instance' => $this->message($exception->errorKey),
-            ]);
-        }
-
-        $providerId = $this->storeMapping($instance->id, $server, $externalId);
-
-        return $this->withStatus($instance, $this->mapLifecycleStatus($server), $providerId);
+        return $instance;
     }
 
     /** @return list<ProvisionerAction> */
@@ -180,47 +108,14 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
 
     public function runAction(ServiceInstanceInfo $instance, string $actionId): void
     {
-        if (! in_array($actionId, ['start', 'stop', 'restart'], true) || ! $this->supportsPowerActions()) {
-            throw ValidationException::withMessages([
-                'action' => $this->message('errors.action_unavailable'),
-            ]);
-        }
-
-        $externalId = $this->requireMapping($instance);
-
-        try {
-            $this->apiFor($instance)->action($externalId, $actionId);
-        } catch (ServerProviderException $exception) {
-            throw ValidationException::withMessages([
-                'action' => $this->message($exception->errorKey),
-            ]);
-        }
+        unset($instance, $actionId);
+        $this->assertUnsupported();
     }
 
     public function panel(ServiceInstanceInfo $instance): ?ProvisionerPanelData
     {
-        $externalId = $this->mappingId($instance);
-        if ($externalId === null) {
-            return null;
-        }
-
-        $status = 'unknown';
-        try {
-            $status = $this->mapDisplayStatus($this->apiFor($instance)->getServer($externalId));
-        } catch (ServerProviderException) {
-            // The detail panel remains useful when a provider is temporarily unavailable.
-        }
-
-        $fields = [
-            ['label' => $this->message('panel.status'), 'value' => $this->message('status.'.$status)],
-            ['label' => $this->message('panel.external_ref'), 'value' => $externalId],
-        ];
-        $managementUrl = $this->managementUrl($instance, $externalId);
-        if ($managementUrl !== null) {
-            $fields[] = ['label' => $this->message('panel.management_url'), 'value' => $managementUrl];
-        }
-
-        return new ProvisionerPanelData($this->message('panel.title'), $fields);
+        unset($instance);
+        $this->assertUnsupported();
     }
 
     public function health(): HealthResult
@@ -255,7 +150,7 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
 
     protected function supportsPowerActions(): bool
     {
-        return true;
+        return false;
     }
 
     /** @param array<string, mixed> $server */
@@ -266,7 +161,7 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
             'suspended', 'suspend' => 'suspended',
             'terminated', 'deleted', 'destroyed' => 'terminated',
             'failed', 'error' => 'failed',
-            default => 'active',
+            default => 'manual_review',
         };
     }
 
@@ -276,11 +171,23 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         return strtolower((string) ($server['status'] ?? 'unknown')) ?: 'unknown';
     }
 
-    protected function buildPlanPayload(ServiceInstanceInfo $instance, string $plan): array
+    /** @param string|array<string, mixed> $plan */
+    protected function buildPlanPayload(ServiceInstanceInfo $instance, string|array $plan): array
     {
         unset($instance);
 
-        return ['plan' => $plan];
+        if (! is_array($plan)) {
+            return ['plan' => $plan];
+        }
+
+        $payload = ['plan' => (string) ($plan['id'] ?? '')];
+        foreach (['provider_settings', 'server_settings', 'server_id', 'target_settings', 'requirements', 'capacity_key'] as $key) {
+            if (array_key_exists($key, $plan)) {
+                $payload[$key] = $plan[$key];
+            }
+        }
+
+        return $payload;
     }
 
     protected function managementUrl(ServiceInstanceInfo $instance, string $externalId): ?string
@@ -296,6 +203,13 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     protected function message(string $key): string
     {
         return __(''.$this->id().'::messages.'.$key);
+    }
+
+    private function assertUnsupported(): never
+    {
+        throw ValidationException::withMessages([
+            'instance' => __('provisioning::errors.unsupported'),
+        ]);
     }
 
     private function assertConfigured(ServiceInstanceInfo $instance): void
@@ -334,6 +248,19 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         return $externalId;
     }
 
+    /** @param array<string, mixed>|null $settings */
+    private function apiForConnection(?array $settings): ServerApi
+    {
+        $connection = $settings ?? $this->repositoryConnectionSettings();
+        foreach ($this->requiredConnectionKeys() as $key) {
+            if (trim((string) ($connection[$key] ?? '')) === '') {
+                throw new ServerProviderException('errors.not_configured');
+            }
+        }
+
+        return $this->api->withConnection($connection);
+    }
+
     private function apiFor(ServiceInstanceInfo $instance): ServerApi
     {
         $settings = $this->connectionSettings($instance);
@@ -351,7 +278,7 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     /** @return array<string, mixed> */
     private function providerSettings(ServiceInstanceInfo $instance): array
     {
-        $settings = $instance->meta['provider_settings'] ?? [];
+        $settings = $instance->providerSettings ?? [];
 
         return is_array($settings) ? $settings : [];
     }
@@ -359,7 +286,7 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     /** @return array<string, mixed> */
     private function connectionSettings(ServiceInstanceInfo $instance): array
     {
-        $settings = $instance->meta['server_settings'] ?? [];
+        $settings = $instance->serverSettings ?? [];
 
         if (($instance->meta['server_settings_required'] ?? false) === true) {
             return is_array($settings) ? $settings : [];
@@ -462,7 +389,8 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         return null;
     }
 
-    private function withStatus(ServiceInstanceInfo $instance, string $status, string $externalId): ServiceInstanceInfo
+    /** @param array<string, mixed> $meta */
+    private function withStatus(ServiceInstanceInfo $instance, string $status, string $externalId, array $meta = []): ServiceInstanceInfo
     {
         return new ServiceInstanceInfo(
             id: $instance->id,
@@ -470,7 +398,9 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
             status: $status,
             providerKey: $this->id(),
             externalRef: $externalId,
-            meta: $instance->meta,
+            meta: array_merge($instance->meta, $meta),
+            serverSettings: $instance->serverSettings,
+            providerSettings: $instance->providerSettings,
         );
     }
 }

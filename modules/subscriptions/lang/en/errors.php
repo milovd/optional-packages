@@ -9,4 +9,6 @@ return [
     'renew_cancelled' => 'A subscription set to cancel at period end cannot renew.',
     'renewal_pending' => 'A pending renewal order already exists for this subscription.',
     'cannot_resume' => 'This subscription cannot undo cancellation.',
+    'not_found' => 'The subscription could not be found.',
+    'conflict' => 'The subscription changed before the plan change was applied.',
 ];

@@ -76,46 +76,50 @@ final class DigitalSecretFulfillmentService
      */
     public function fulfillPaidOrder(Order $order): void
     {
-        $order->loadMissing('items');
-        $delivered = 0;
-
-        foreach ($order->items as $item) {
-            if ($item->product_id === null) {
-                continue;
-            }
-
-            $product = Product::query()->with('capabilities')->find($item->product_id);
-            if ($product === null || ! $product->hasCapability(self::CAPABILITY)) {
-                continue;
-            }
-
-            $source = $this->sourceFor($product);
-            $providerId = $this->providerIdFor($product);
-            $quantity = max(1, (int) $item->quantity);
-
-            $existing = DigitalSecretDelivery::query()
+        $delivered = DB::transaction(function () use ($order): int {
+            $items = OrderItem::query()
                 ->where('order_id', $order->id)
-                ->where('order_item_id', $item->id)
-                ->count();
+                ->lockForUpdate()
+                ->get();
+            $delivered = 0;
 
-            for ($unit = $existing; $unit < $quantity; $unit++) {
-                if ($source === DigitalSecretDelivery::SOURCE_POOL) {
-                    if ($this->deliverFromPool($order, $item, $product)) {
-                        $delivered++;
+            foreach ($items as $item) {
+                if ($item->product_id === null) {
+                    continue;
+                }
+
+                $product = Product::query()->with('capabilities')->find($item->product_id);
+                if ($product === null || ! $product->hasCapability(self::CAPABILITY)) {
+                    continue;
+                }
+
+                $source = $this->sourceFor($product);
+                $providerId = $this->providerIdFor($product);
+                $quantity = max(1, (int) $item->quantity);
+                $existing = DigitalSecretDelivery::query()
+                    ->where('order_id', $order->id)
+                    ->where('order_item_id', $item->id)
+                    ->count();
+
+                for ($unit = $existing; $unit < $quantity; $unit++) {
+                    if ($source === DigitalSecretDelivery::SOURCE_POOL) {
+                        if ($this->deliverFromPool($order, $item, $product)) {
+                            $delivered++;
+
+                            continue;
+                        }
+
+                        $this->createPendingManual($order, $item, $product, DigitalSecretDelivery::SOURCE_POOL, null);
 
                         continue;
                     }
 
-                    // Pool ran dry between checkout and payment: record work for staff
-                    // instead of failing a paid order.
-                    $this->createPendingManual($order, $item, $product, DigitalSecretDelivery::SOURCE_POOL, null);
-
-                    continue;
+                    $this->createPendingManual($order, $item, $product, $source, $providerId);
                 }
-
-                $this->createPendingManual($order, $item, $product, $source, $providerId);
             }
-        }
+
+            return $delivered;
+        });
 
         if ($delivered > 0) {
             $this->notifyDelivered($order);

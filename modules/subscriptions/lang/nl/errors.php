@@ -9,4 +9,6 @@ return [
     'renew_cancelled' => 'Een abonnement dat aan einde periode stopt, kan niet worden verlengd.',
     'renewal_pending' => 'Er bestaat al een openstaande verlengingsbestelling voor dit abonnement.',
     'cannot_resume' => 'Opzegging van dit abonnement kan niet ongedaan worden gemaakt.',
+    'not_found' => 'Het abonnement kon niet worden gevonden.',
+    'conflict' => 'Het abonnement is gewijzigd voordat de planwijziging kon worden toegepast.',
 ];

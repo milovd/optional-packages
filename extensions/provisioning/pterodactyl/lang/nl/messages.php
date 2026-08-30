@@ -82,6 +82,7 @@ return [
         'timeout' => 'Het panelverzoek is verlopen.',
         'unauthorized' => 'Het panel heeft deze gegevens geweigerd.',
         'malformed' => 'Het panel gaf een onverwacht antwoord.',
+        'out_of_stock' => 'Dit product is tijdelijk niet beschikbaar omdat de gevraagde panelcapaciteit vol zit.',
         'power_unavailable' => 'Power-acties zijn niet geconfigureerd voor deze provider.',
         'power_failed' => 'Het panel kon de powerstatus niet wijzigen.',
         'action_unavailable' => 'Die service-actie is niet beschikbaar.',

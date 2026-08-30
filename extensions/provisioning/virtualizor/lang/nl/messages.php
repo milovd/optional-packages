@@ -55,5 +55,7 @@ return [
         'timeout' => 'De providerrequest duurde te lang.',
         'unreachable' => 'De provider kon niet worden bereikt.',
         'malformed' => 'De provider gaf een ongeldige response terug.',
+        'capacity_unsupported' => 'Deze provider heeft geen geverifieerde capaciteitscheck; checkout is daarom uitgeschakeld voor dit product.',
+        'out_of_stock' => 'Dit product is tijdelijk niet beschikbaar omdat de gevraagde capaciteit vol zit.',
     ],
 ];

@@ -11,6 +11,7 @@ use Agovena\Modules\Subscriptions\Http\Livewire\Admin\SubscriptionsIndex;
 use Agovena\Modules\Subscriptions\Http\Livewire\Customer\SubscriptionShow as CustomerSubscriptionShow;
 use Agovena\Modules\Subscriptions\Http\Livewire\Customer\SubscriptionsIndex as CustomerSubscriptionsIndex;
 use Agovena\Modules\Subscriptions\Listeners\ApplyPlanChangeToSubscription;
+use Agovena\Modules\Subscriptions\Listeners\CancelRenewalsWhenOrderCancelled;
 use Agovena\Modules\Subscriptions\Listeners\CreateSubscriptionsWhenOrderPaid;
 use Agovena\Modules\Subscriptions\Models\Subscription;
 use App\Agovena\Admin\CustomerDetailSection;
@@ -20,6 +21,7 @@ use App\Agovena\Customer\AccountNavItem;
 use App\Agovena\Customer\AccountOverviewCard;
 use App\Agovena\Modules\Contracts\Module;
 use App\Agovena\Modules\ModuleContext;
+use App\Events\OrderCancelled;
 use App\Events\OrderPaid;
 use App\Events\PlanChangeApplied;
 use App\Models\Customer;
@@ -94,6 +96,7 @@ final class SubscriptionsModule implements Module
             20,
         );
 
+        $context->listen(OrderCancelled::class, CancelRenewalsWhenOrderCancelled::class);
         $context->listen(OrderPaid::class, CreateSubscriptionsWhenOrderPaid::class);
         $context->listen(PlanChangeApplied::class, ApplyPlanChangeToSubscription::class);
 

@@ -8,6 +8,7 @@ use Agovena\Modules\Subscriptions\Enums\SubscriptionStatus;
 use Agovena\Modules\Subscriptions\Models\Subscription;
 use App\Events\PlanChangeApplied;
 use App\Models\Product;
+use Illuminate\Validation\ValidationException;
 
 final class ApplyPlanChangeToSubscription
 {
@@ -18,18 +19,24 @@ final class ApplyPlanChangeToSubscription
             return;
         }
 
-        $subscription = Subscription::query()->whereKey($subscriptionId)->first();
+        $subscription = Subscription::query()->whereKey($subscriptionId)->lockForUpdate()->first();
         if ($subscription === null) {
-            return;
+            throw ValidationException::withMessages(['plan' => __('subscriptions::errors.not_found')]);
         }
 
-        $to = Product::query()->find($event->request->to_product_id);
+        if ((int) $subscription->customer_id !== (int) $event->request->customer_id
+            || (int) $subscription->product_id !== (int) $event->request->from_product_id
+        ) {
+            throw ValidationException::withMessages(['plan' => __('subscriptions::errors.conflict')]);
+        }
+
+        if ($subscription->status !== SubscriptionStatus::Active) {
+            throw ValidationException::withMessages(['plan' => __('subscriptions::errors.conflict')]);
+        }
+
+        $to = Product::query()->active()->find($event->request->to_product_id);
         if ($to === null) {
-            return;
-        }
-
-        if (in_array($subscription->status, [SubscriptionStatus::Ended, SubscriptionStatus::Cancelled], true)) {
-            return;
+            throw ValidationException::withMessages(['plan' => __('subscriptions::errors.not_found')]);
         }
 
         $subscription->product_id = $to->id;

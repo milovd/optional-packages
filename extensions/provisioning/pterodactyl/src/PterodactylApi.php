@@ -19,6 +19,16 @@ interface PterodactylApi
     public function connectionTest(): array;
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    public function getDeployableNodes(int $locationId, int $memory, int $disk): array;
+
+    /**
+     * @return array{memory: int|float, disk: int|float}
+     */
+    public function getCapacityVector(int $locationId): array;
+
+    /**
      * @return array<string, mixed>|null
      */
     public function findServerByExternalId(string $externalId): ?array;
@@ -50,6 +60,12 @@ interface PterodactylApi
      * @return array<string, mixed>
      */
     public function updateBuild(int $serverId, array $payload): array;
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function updateStartup(int $serverId, array $payload): array;
 
     /**
      * @return array<string, mixed>

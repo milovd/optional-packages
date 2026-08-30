@@ -33,6 +33,19 @@ abstract class AbstractHttpServerApi implements ServerApi
         return $this->request('GET', $this->healthPath());
     }
 
+    /**
+     * Provider adapters must implement their own capacity semantics. A shared
+     * endpoint would risk treating an unrelated vendor response as capacity.
+     *
+     * @param array<string, mixed> $requirements
+     */
+    public function availableCapacity(array $requirements): int
+    {
+        unset($requirements);
+
+        throw new ServerProviderException('errors.capacity_unsupported');
+    }
+
     /** @return array<string, mixed>|null */
     public function findServerByExternalId(string $externalId): ?array
     {
@@ -132,7 +145,10 @@ abstract class AbstractHttpServerApi implements ServerApi
         }
 
         $timeout = max(1, (int) ($this->connection['timeout'] ?? 20));
-        $verifyTls = filter_var($this->connection['verify_tls'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        $verifyTls = filter_var($this->connection['verify_tls'] ?? true, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($verifyTls === null) {
+            throw new ServerProviderException('errors.invalid_mapping');
+        }
         $pending = Http::timeout($timeout)
             ->withHeaders($this->headers())
             ->acceptJson()

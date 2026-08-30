@@ -8,6 +8,7 @@ use Agovena\Modules\Digital\Models\DigitalAsset;
 use Agovena\Modules\Digital\Models\DigitalEntitlement;
 use App\Agovena\Notifications\SendsCataloguedMail;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -20,48 +21,54 @@ final class DigitalDeliveryService
 {
     public function grantForPaidOrder(Order $order): void
     {
-        $order->loadMissing('items');
-        $granted = 0;
-
-        foreach ($order->items as $item) {
-            if ($item->product_id === null) {
-                continue;
-            }
-
-            $product = Product::query()->with('capabilities')->find($item->product_id);
-            if ($product === null || ! $product->hasCapability('digital')) {
-                continue;
-            }
-
-            $assets = DigitalAsset::query()
-                ->where('product_id', $product->id)
-                ->where('is_active', true)
+        $granted = DB::transaction(function () use ($order): int {
+            $items = OrderItem::query()
+                ->where('order_id', $order->id)
+                ->lockForUpdate()
                 ->get();
+            $granted = 0;
 
-            foreach ($assets as $asset) {
-                $exists = DigitalEntitlement::query()
-                    ->where('order_id', $order->id)
-                    ->where('digital_asset_id', $asset->id)
-                    ->exists();
-                if ($exists) {
+            foreach ($items as $item) {
+                if ($item->product_id === null) {
                     continue;
                 }
 
-                DigitalEntitlement::query()->create([
-                    'order_id' => $order->id,
-                    'order_item_id' => $item->id,
-                    'product_id' => $product->id,
-                    'digital_asset_id' => $asset->id,
-                    'customer_id' => $order->customer_id,
-                    'customer_email' => $order->customer_email,
-                    'token' => Str::random(48),
-                    'download_limit' => $asset->download_limit,
-                    'download_count' => 0,
-                    'granted_at' => now(),
-                ]);
-                $granted++;
+                $product = Product::query()->with('capabilities')->find($item->product_id);
+                if ($product === null || ! $product->hasCapability('digital')) {
+                    continue;
+                }
+
+                $assets = DigitalAsset::query()
+                    ->where('product_id', $product->id)
+                    ->where('is_active', true)
+                    ->get();
+
+                foreach ($assets as $asset) {
+                    if (DigitalEntitlement::query()
+                        ->where('order_id', $order->id)
+                        ->where('digital_asset_id', $asset->id)
+                        ->exists()) {
+                        continue;
+                    }
+
+                    DigitalEntitlement::query()->create([
+                        'order_id' => $order->id,
+                        'order_item_id' => $item->id,
+                        'product_id' => $product->id,
+                        'digital_asset_id' => $asset->id,
+                        'customer_id' => $order->customer_id,
+                        'customer_email' => $order->customer_email,
+                        'token' => Str::random(48),
+                        'download_limit' => $asset->download_limit,
+                        'download_count' => 0,
+                        'granted_at' => now(),
+                    ]);
+                    $granted++;
+                }
             }
-        }
+
+            return $granted;
+        });
 
         if ($granted > 0) {
             app(SendsCataloguedMail::class)->toOrderCustomer(

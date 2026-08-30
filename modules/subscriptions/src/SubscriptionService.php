@@ -15,10 +15,12 @@ use App\Agovena\Billing\ConsolidatedBillingLine;
 use App\Agovena\Billing\ConsolidatedRenewalOrderBuilder;
 use App\Agovena\Invoices\IssueInvoiceFromOrder;
 use App\Agovena\Notifications\SendsCataloguedMail;
+use App\Agovena\Credits\CustomerCreditLedger;
 use App\Agovena\Orders\CancelUnpaidOrder;
 use App\Agovena\Orders\UnpaidOrderCancelSource;
 use App\Agovena\Payments\ChargeRecurringPayment;
 use App\Agovena\Payments\CheckoutPaymentSelection;
+use App\Agovena\Payments\CompleteAccountBalancePayment;
 use App\Agovena\Payments\RecurringChargeOutcome;
 use App\Agovena\Payments\RecurringChargeResult;
 use App\Agovena\PlanChanges\ApplyPlanChange;
@@ -27,6 +29,7 @@ use App\Agovena\Subscriptions\ProcessesSubscriptionRenewals;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentAttemptStatus;
 use App\Enums\PaymentStatus;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
@@ -53,12 +56,18 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         private readonly ApplyPlanChange $applyPlanChange,
         private readonly CancelUnpaidOrder $cancelUnpaidOrder,
         private readonly ChargeRecurringPayment $chargeRecurring,
+        private readonly CustomerCreditLedger $creditLedger,
+        private readonly CompleteAccountBalancePayment $completeAccountBalancePayment,
         private readonly SettingsRepository $settings,
     ) {}
 
     public function createFromPaidOrder(Order $order): void
     {
         $order->loadMissing('items', 'payment');
+
+        if (($order->custom_properties_snapshot['origin'] ?? null) === 'plan_change_surcharge') {
+            return;
+        }
 
         if (SubscriptionRenewal::query()->where('order_id', $order->id)->exists()) {
             return;
@@ -74,52 +83,54 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
                 continue;
             }
 
-            $exists = Subscription::query()
-                ->where('order_item_id', $item->id)
-                ->exists();
-            if ($exists) {
-                continue;
-            }
+            DB::transaction(function () use ($order, $item, $product): void {
+                $lockedItem = OrderItem::query()
+                    ->whereKey($item->id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($lockedItem === null || Subscription::query()->where('order_item_id', $lockedItem->id)->exists()) {
+                    return;
+                }
 
-            $capability = $product->capability('subscribable');
-            $config = $capability !== null ? ($capability->config ?? []) : [];
-            $interval = SubscriptionInterval::tryFrom((string) ($config['interval'] ?? 'month'))
-                ?? SubscriptionInterval::Month;
-            $intervalCount = max(1, (int) ($config['interval_count'] ?? 1));
-            $trialDays = max(0, (int) ($config['trial_days'] ?? 0));
+                $capability = $product->capability('subscribable');
+                $config = $capability !== null ? ($capability->config ?? []) : [];
+                $interval = SubscriptionInterval::tryFrom((string) ($config['interval'] ?? 'month'))
+                    ?? SubscriptionInterval::Month;
+                $intervalCount = max(1, (int) ($config['interval_count'] ?? 1));
+                $trialDays = max(0, (int) ($config['trial_days'] ?? 0));
 
-            $now = CarbonImmutable::now();
-            $trialEnds = $trialDays > 0 ? $now->addDays($trialDays) : null;
-            $periodStart = $trialEnds ?? $now;
-            $periodEnd = $this->addInterval($periodStart, $interval, $intervalCount);
+                $now = CarbonImmutable::now();
+                $trialEnds = $trialDays > 0 ? $now->addDays($trialDays) : null;
+                $periodStart = $trialEnds ?? $now;
+                $periodEnd = $this->addInterval($periodStart, $interval, $intervalCount);
 
-            $attributes = [
-                'number' => $this->generateNumber(),
-                'customer_id' => $order->customer_id,
-                'customer_email' => $order->customer_email,
-                'customer_name' => $order->customer_name,
-                'product_id' => $product->id,
-                'order_id' => $order->id,
-                'order_item_id' => $item->id,
-                'status' => SubscriptionStatus::Active,
-                'interval' => $interval,
-                'interval_count' => $intervalCount,
-                'price_amount' => $item->unit_amount,
-                'currency' => $item->currency,
-                'quantity' => $item->quantity,
-                'trial_ends_at' => $trialEnds,
-                'current_period_start' => $periodStart,
-                'current_period_end' => $periodEnd,
-                'next_billing_at' => $periodEnd,
-                'cancel_at_period_end' => false,
-            ];
-            if (Schema::hasColumn('subscriptions', 'payment_gateway')) {
-                $attributes['payment_gateway'] = $this->gatewayIdFromOrder($order);
-            }
+                $attributes = [
+                    'number' => $this->generateNumber(),
+                    'customer_id' => $order->customer_id,
+                    'customer_email' => $order->customer_email,
+                    'customer_name' => $order->customer_name,
+                    'product_id' => $product->id,
+                    'order_id' => $order->id,
+                    'order_item_id' => $lockedItem->id,
+                    'status' => SubscriptionStatus::Active,
+                    'interval' => $interval,
+                    'interval_count' => $intervalCount,
+                    'price_amount' => $lockedItem->unit_amount,
+                    'currency' => $lockedItem->currency,
+                    'quantity' => $lockedItem->quantity,
+                    'trial_ends_at' => $trialEnds,
+                    'current_period_start' => $periodStart,
+                    'current_period_end' => $periodEnd,
+                    'next_billing_at' => $periodEnd,
+                    'cancel_at_period_end' => false,
+                ];
+                if (Schema::hasColumn('subscriptions', 'payment_gateway')) {
+                    $attributes['payment_gateway'] = $this->gatewayIdFromOrder($order);
+                }
 
-            $subscription = Subscription::query()->create($attributes);
-
-            $this->linkServiceInstances((int) $subscription->id, $item->id);
+                $subscription = Subscription::query()->create($attributes);
+                $this->linkServiceInstances((int) $subscription->id, $lockedItem->id);
+            });
         }
     }
 
@@ -409,7 +420,7 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
     {
         return implode('|', [
             (string) $subscription->customer_id,
-            strtolower((string) $subscription->customer_email),
+            strtolower(trim((string) $subscription->customer_email)),
             strtoupper((string) $subscription->currency),
             $this->gatewayIdFromSubscription($subscription),
             $subscription->interval->value,
@@ -611,6 +622,16 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
             return RecurringChargeResult::charged();
         }
 
+        if ($order->payment !== null && (int) $order->payment->amount === 0) {
+            $this->completeAccountBalancePayment->handle($order);
+
+            return RecurringChargeResult::charged();
+        }
+
+        if ($this->settleRenewalFromCredit($order)) {
+            return RecurringChargeResult::charged();
+        }
+
         if (! $this->autoChargeEnabled()) {
             $this->markManualPaymentRequiredForOrder($order);
             if ($isNewOrder) {
@@ -653,6 +674,53 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         return $result;
     }
 
+    private function settleRenewalFromCredit(Order $order): bool
+    {
+        return DB::transaction(function () use ($order): bool {
+            if (! $this->automaticallyPayFromCredit($order)) {
+                return false;
+            }
+
+            $this->completeAccountBalancePayment->handle($order);
+
+            return true;
+        });
+    }
+
+    private function automaticallyPayFromCredit(Order $order): bool
+    {
+        $payment = $order->payment;
+        if ($payment === null || (int) $payment->amount < 1 || $order->customer_id === null) {
+            return false;
+        }
+
+        $customer = Customer::query()->find($order->customer_id);
+        if ($customer === null) {
+            return false;
+        }
+
+        $amount = (int) $payment->amount;
+        if ($this->creditLedger->available($customer, $order->currency) < $amount) {
+            return false;
+        }
+
+        try {
+            $this->creditLedger->reserve($customer, $amount, $order);
+        } catch (ValidationException) {
+            // A concurrent checkout may have consumed the balance. Keep the
+            // renewal on its configured gateway/manual path in that case.
+            return false;
+        }
+
+        $order->credit_amount = (int) $order->credit_amount + $amount;
+        $order->save();
+        $payment->method = 'account_balance';
+        $payment->amount = 0;
+        $payment->save();
+
+        return true;
+    }
+
     public function applyPaidRenewal(Order $order): void
     {
         DB::transaction(function () use ($order): void {
@@ -692,6 +760,10 @@ final class SubscriptionService implements ProcessesSubscriptionRenewals
         $payment = $order->payment;
         if ($payment === null) {
             return false;
+        }
+
+        if ($payment->method === 'account_balance') {
+            return true;
         }
 
         return PaymentAttempt::query()

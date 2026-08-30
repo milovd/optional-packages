@@ -10,6 +10,11 @@ interface ProxmoxApi
 
     public function connectionTest(): array;
 
+    /**
+     * @return array{memory_free: int|float, cpu_cores: int|float, storage_free: int|float}
+     */
+    public function nodeCapacity(string $node, string $storage): array;
+
     public function nextVmId(): int;
 
     /**
@@ -32,6 +37,11 @@ interface ProxmoxApi
      * @return array<string, mixed>
      */
     public function currentStatus(string $node, int $vmid): array;
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findVmByName(string $node, string $name): ?array;
 
     /**
      * @return array<string, mixed>|null

@@ -11,14 +11,22 @@ final class PterodactylStatusMapper
      */
     public static function lifecycleStatus(array $server): string
     {
-        $suspended = (bool) ($server['suspended'] ?? false);
+        if (! array_key_exists('suspended', $server) || ! is_bool($server['suspended'])) {
+            return 'manual_review';
+        }
+        $suspended = $server['suspended'];
         $status = strtolower((string) ($server['status'] ?? ''));
 
         if ($suspended || $status === 'suspended') {
             return 'suspended';
         }
 
+        if ($status === '' || ! in_array($status, ['active', 'installing', 'restoring_backup', 'install_failed'], true)) {
+            return 'manual_review';
+        }
+
         return match ($status) {
+            'active' => 'active',
             'installing', 'restoring_backup' => 'provisioning',
             'install_failed' => 'failed',
             default => 'active',

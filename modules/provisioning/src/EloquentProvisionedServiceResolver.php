@@ -7,11 +7,19 @@ namespace Agovena\Modules\Provisioning;
 use Agovena\Modules\Provisioning\Models\ServiceInstance;
 use App\Agovena\Provisioning\Contracts\ResolvesProvisionedServices;
 use App\Agovena\Provisioning\ServiceInstanceInfo;
+use App\Agovena\Security\SensitiveDataRedactor;
 use App\Models\Customer;
-use App\Models\ProvisioningServer;
+use Illuminate\Support\Facades\Crypt;
+use Throwable;
 
 final class EloquentProvisionedServiceResolver implements ResolvesProvisionedServices
 {
+    /** @param array<string, mixed> $meta @return array<string, mixed> */
+    public static function sanitizePersistedMeta(array $meta): array
+    {
+        return SensitiveDataRedactor::redact($meta);
+    }
+
     public function resolveForCustomer(Customer $customer, int $instanceId): ?ServiceInstanceInfo
     {
         $instance = ServiceInstance::query()
@@ -24,17 +32,34 @@ final class EloquentProvisionedServiceResolver implements ResolvesProvisionedSer
 
     public static function info(ServiceInstance $instance): ServiceInstanceInfo
     {
-        $meta = $instance->meta ?? [];
+        $persistedMeta = is_array($instance->meta) ? $instance->meta : [];
+        $meta = self::sanitizePersistedMeta($persistedMeta);
+        $serverSettings = null;
+        try {
+            $providerSnapshot = $instance->provider_settings_snapshot;
+            $serverSnapshot = $instance->server_settings_snapshot;
+        } catch (Throwable) {
+            $providerSnapshot = null;
+            $serverSnapshot = null;
+        }
+        $providerSettings = is_array($providerSnapshot) ? $providerSnapshot : null;
+        $encryptedProviderSettings = $persistedMeta['provider_settings_encrypted'] ?? null;
+        if ($providerSettings === null && is_string($encryptedProviderSettings) && $encryptedProviderSettings !== '') {
+            try {
+                $providerSettings = json_decode(Crypt::decryptString($encryptedProviderSettings), true, 512, JSON_THROW_ON_ERROR);
+                if (! is_array($providerSettings)) {
+                    $providerSettings = null;
+                }
+            } catch (Throwable) {
+                $providerSettings = null;
+            }
+        }
         if ($instance->provisioning_server_id !== null) {
             $meta['server_settings_required'] = true;
-            $server = ProvisioningServer::query()
-                ->where('is_active', true)
-                ->find($instance->provisioning_server_id);
-            if ($server !== null && $server->is_active && $server->provider_key === $instance->provider_key) {
-                $meta['server_settings'] = $server->settings;
+            if (is_array($serverSnapshot) && $serverSnapshot !== []) {
+                $serverSettings = $serverSnapshot;
                 unset($meta['server_settings_unavailable']);
             } else {
-                $meta['server_settings'] = [];
                 $meta['server_settings_unavailable'] = true;
             }
         }
@@ -46,6 +71,9 @@ final class EloquentProvisionedServiceResolver implements ResolvesProvisionedSer
             providerKey: $instance->provider_key,
             externalRef: $instance->external_ref,
             meta: $meta,
+            serverSettings: $serverSettings,
+            providerSettings: $providerSettings,
         );
     }
+
 }

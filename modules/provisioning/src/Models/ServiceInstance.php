@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $provisioning_server_id
  * @property string|null $external_ref
  * @property array<string, mixed>|null $meta
+ * @property array<string, mixed>|null $provider_settings_snapshot
  * @property CarbonInterface|null $provisioning_at
  * @property CarbonInterface|null $activated_at
  * @property CarbonInterface|null $suspended_at
@@ -39,10 +40,13 @@ final class ServiceInstance extends Model
 {
     protected $table = 'service_instances';
 
+    protected $hidden = ['server_settings_snapshot', 'provider_settings_snapshot'];
+
     protected $fillable = [
         'number',
         'order_id',
         'order_item_id',
+        'unit_index',
         'product_id',
         'customer_id',
         'customer_email',
@@ -52,6 +56,8 @@ final class ServiceInstance extends Model
         'provider_key',
         'provisioning_server_id',
         'external_ref',
+        'server_settings_snapshot',
+        'provider_settings_snapshot',
         'meta',
         'provisioning_at',
         'activated_at',
@@ -65,7 +71,10 @@ final class ServiceInstance extends Model
     {
         return [
             'status' => ServiceInstanceStatus::class,
+            'unit_index' => 'integer',
             'meta' => 'array',
+            'server_settings_snapshot' => 'encrypted:array',
+            'provider_settings_snapshot' => 'encrypted:array',
             'provisioning_at' => 'datetime',
             'activated_at' => 'datetime',
             'suspended_at' => 'datetime',

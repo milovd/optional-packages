@@ -12,6 +12,9 @@ interface ServerApi
     /** @return array<string, mixed> */
     public function connectionTest(): array;
 
+    /** @param array<string, mixed> $requirements */
+    public function availableCapacity(array $requirements): int;
+
     /** @return array<string, mixed>|null */
     public function findServerByExternalId(string $externalId): ?array;
 

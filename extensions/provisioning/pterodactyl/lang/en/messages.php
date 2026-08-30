@@ -86,5 +86,6 @@ return [
         'power_failed' => 'The panel could not change the server power state.',
         'action_unavailable' => 'That service action is not available.',
         'provider_failed' => 'The panel could not complete this action.',
+        'out_of_stock' => 'This product is temporarily unavailable because the requested panel capacity is full.',
     ],
 ];

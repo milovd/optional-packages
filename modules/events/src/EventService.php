@@ -10,6 +10,7 @@ use Agovena\Modules\Events\Models\EventTicket;
 use Agovena\Modules\Events\Models\EventTicketType;
 use App\Agovena\Notifications\SendsCataloguedMail;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -78,50 +79,57 @@ final class EventService
 
     public function issueFromPaidOrder(Order $order): void
     {
-        $order->loadMissing('items');
-        $issued = 0;
+        $issued = DB::transaction(function () use ($order): int {
+            $items = OrderItem::query()
+                ->where('order_id', $order->id)
+                ->lockForUpdate()
+                ->get();
+            $issued = 0;
 
-        foreach ($order->items as $item) {
-            if ($item->product_id === null) {
-                continue;
+            foreach ($items as $item) {
+                if ($item->product_id === null) {
+                    continue;
+                }
+
+                $product = Product::query()->with('capabilities')->find($item->product_id);
+                if ($product === null || ! $product->hasCapability('event_ticket')) {
+                    continue;
+                }
+
+                $type = $this->ticketTypeForProduct($product);
+                if ($type === null || $type->performance_id === null) {
+                    continue;
+                }
+
+                $existing = EventTicket::query()->where('order_item_id', $item->id)->count();
+                $needed = max(0, $item->quantity - $existing);
+                if ($needed === 0) {
+                    continue;
+                }
+
+                $this->assertAvailable($product, $needed);
+
+                for ($i = 0; $i < $needed; $i++) {
+                    EventTicket::query()->create([
+                        'number' => $this->generateNumber(),
+                        'token' => bin2hex(random_bytes(32)),
+                        'event_id' => $type->event_id,
+                        'performance_id' => $type->performance_id,
+                        'ticket_type_id' => $type->id,
+                        'product_id' => $product->id,
+                        'order_id' => $order->id,
+                        'order_item_id' => $item->id,
+                        'customer_id' => $order->customer_id,
+                        'customer_email' => $order->customer_email,
+                        'customer_name' => $order->customer_name,
+                        'status' => EventTicketStatus::Issued,
+                    ]);
+                    $issued++;
+                }
             }
 
-            $product = Product::query()->with('capabilities')->find($item->product_id);
-            if ($product === null || ! $product->hasCapability('event_ticket')) {
-                continue;
-            }
-
-            $type = $this->ticketTypeForProduct($product);
-            if ($type === null || $type->performance_id === null) {
-                continue;
-            }
-
-            $existing = EventTicket::query()->where('order_item_id', $item->id)->count();
-            $needed = max(0, $item->quantity - $existing);
-            if ($needed === 0) {
-                continue;
-            }
-
-            $this->assertAvailable($product, $needed);
-
-            for ($i = 0; $i < $needed; $i++) {
-                EventTicket::query()->create([
-                    'number' => $this->generateNumber(),
-                    'token' => bin2hex(random_bytes(32)),
-                    'event_id' => $type->event_id,
-                    'performance_id' => $type->performance_id,
-                    'ticket_type_id' => $type->id,
-                    'product_id' => $product->id,
-                    'order_id' => $order->id,
-                    'order_item_id' => $item->id,
-                    'customer_id' => $order->customer_id,
-                    'customer_email' => $order->customer_email,
-                    'customer_name' => $order->customer_name,
-                    'status' => EventTicketStatus::Issued,
-                ]);
-                $issued++;
-            }
-        }
+            return $issued;
+        });
 
         if ($issued > 0) {
             app(SendsCataloguedMail::class)->toOrderCustomer(

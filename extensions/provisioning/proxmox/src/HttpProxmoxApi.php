@@ -15,12 +15,12 @@ final class HttpProxmoxApi implements ProxmoxApi
     /** @param array<string, mixed> $connection */
     public function __construct(
         private readonly ExtensionSettingsRepository $settings,
-        private readonly array $connection = [],
+        private readonly ?array $connection = null,
     ) {}
 
     public function withConnection(array $settings): ProxmoxApi
     {
-        return new self($this->settings, $settings);
+        return new self($this->settings, $settings !== [] ? $settings : null);
     }
 
     public function connectionTest(): array
@@ -28,11 +28,34 @@ final class HttpProxmoxApi implements ProxmoxApi
         return $this->request('GET', '/version');
     }
 
+    public function nodeCapacity(string $node, string $storage): array
+    {
+        $nodeStatus = $this->request('GET', '/nodes/'.rawurlencode($node).'/status')['data'] ?? null;
+        $storageStatus = $this->request('GET', '/nodes/'.rawurlencode($node).'/storage/'.rawurlencode($storage).'/status')['data'] ?? null;
+        if (! is_array($nodeStatus) || ! is_array($storageStatus)) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+        }
+
+        $cpuInfo = is_array($nodeStatus['cpuinfo'] ?? null) ? $nodeStatus['cpuinfo'] : [];
+
+        return [
+            'memory_free' => $nodeStatus['memory']['free'] ?? null,
+            'cpu_cores' => $cpuInfo['cpus'] ?? $cpuInfo['cores'] ?? $nodeStatus['cpus'] ?? null,
+            'storage_free' => $storageStatus['avail'] ?? null,
+        ];
+    }
+
     public function nextVmId(): int
     {
         $response = $this->request('GET', '/cluster/nextid');
+        $value = $response['data'] ?? null;
+        $parsed = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
-        return (int) ($response['data'] ?? 100);
+        if ($parsed === false) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+        }
+
+        return $parsed;
     }
 
     public function cloneVm(string $node, int $templateVmid, array $payload): string
@@ -43,11 +66,7 @@ final class HttpProxmoxApi implements ProxmoxApi
             body: $payload,
         );
 
-        $upid = (string) ($response['data'] ?? '');
-        if ($upid === '') {
-            throw ProxmoxProviderException::failed('proxmox::messages.errors.create_failed');
-        }
-
+        $upid = $this->taskId($response, 'create');
         $this->waitForTask($node, $upid);
 
         return $upid;
@@ -61,34 +80,27 @@ final class HttpProxmoxApi implements ProxmoxApi
     public function start(string $node, int $vmid): void
     {
         $response = $this->request('POST', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/status/start');
-        $upid = (string) ($response['data'] ?? '');
-        if ($upid !== '') {
-            $this->waitForTask($node, $upid, maxAttempts: 30);
-        }
+        $this->waitForTask($node, $this->taskId($response, 'start'), maxAttempts: 30);
     }
 
     public function stop(string $node, int $vmid): void
     {
         $response = $this->request('POST', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/status/stop');
-        $upid = (string) ($response['data'] ?? '');
-        if ($upid !== '') {
-            $this->waitForTask($node, $upid, maxAttempts: 30);
-        }
+        $this->waitForTask($node, $this->taskId($response, 'stop'), maxAttempts: 30);
     }
 
     public function deleteVm(string $node, int $vmid): void
     {
         try {
             $this->stop($node, $vmid);
-        } catch (ProxmoxProviderException) {
-            // Best effort stop before delete.
+        } catch (ProxmoxProviderException $exception) {
+            if ($exception->status !== 404) {
+                throw $exception;
+            }
         }
 
         $response = $this->request('DELETE', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid);
-        $upid = (string) ($response['data'] ?? '');
-        if ($upid !== '') {
-            $this->waitForTask($node, $upid, maxAttempts: 60);
-        }
+        $this->waitForTask($node, $this->taskId($response, 'delete'), maxAttempts: 60);
     }
 
     public function currentStatus(string $node, int $vmid): array
@@ -96,7 +108,40 @@ final class HttpProxmoxApi implements ProxmoxApi
         $response = $this->request('GET', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/status/current');
         $data = $response['data'] ?? [];
 
-        return is_array($data) ? $data : [];
+        if (! is_array($data)
+            || ! array_key_exists('status', $data)
+            || ! is_string($data['status'])
+            || trim($data['status']) === ''
+        ) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+        }
+
+        return $data;
+    }
+
+    public function findVmByName(string $node, string $name): ?array
+    {
+        $response = $this->request('GET', '/nodes/'.rawurlencode($node).'/qemu');
+        $items = $response['data'] ?? null;
+        if (! is_array($items)) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+        }
+        foreach ($items as $item) {
+            if (! is_array($item) || ! array_key_exists('name', $item) || ! array_key_exists('vmid', $item)) {
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+            }
+            $vmid = $this->positiveVmid($item['vmid']);
+            if ($vmid === null) {
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+            }
+            if ((string) $item['name'] !== $name) {
+                continue;
+            }
+
+            return ['node' => $node, 'vmid' => $vmid, 'name' => $name];
+        }
+
+        return null;
     }
 
     public function findVmConfig(string $node, int $vmid): ?array
@@ -104,8 +149,11 @@ final class HttpProxmoxApi implements ProxmoxApi
         try {
             $response = $this->request('GET', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/config');
             $data = $response['data'] ?? null;
+            if (! is_array($data)) {
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+            }
 
-            return is_array($data) ? $data : null;
+            return $data;
         } catch (ProxmoxProviderException $exception) {
             if ($exception->status === 404) {
                 return null;
@@ -115,6 +163,25 @@ final class HttpProxmoxApi implements ProxmoxApi
         }
     }
 
+    /** @param array<string, mixed> $response */
+    private function taskId(array $response, string $operation): string
+    {
+        $taskId = $response['data'] ?? null;
+        $errorKey = $operation === 'create'
+            ? 'proxmox::messages.errors.create_failed'
+            : 'proxmox::messages.errors.provider_failed';
+        if (! is_string($taskId)) {
+            throw ProxmoxProviderException::failed($errorKey);
+        }
+
+        $taskId = trim($taskId);
+        if (preg_match('/\AUPID:[^:\s]+(?::[^:\s]+){6,8}:\z/D', $taskId) !== 1) {
+            throw ProxmoxProviderException::failed($errorKey);
+        }
+
+        return $taskId;
+    }
+
     private function waitForTask(string $node, string $upid, int $maxAttempts = 120): void
     {
         sleep(1);
@@ -122,15 +189,19 @@ final class HttpProxmoxApi implements ProxmoxApi
             $response = $this->request('GET', '/nodes/'.rawurlencode($node).'/tasks/'.rawurlencode($upid).'/status');
             $status = (string) (($response['data']['status'] ?? '') ?: '');
             if ($status === 'stopped') {
-                $exit = (string) ($response['data']['exitstatus'] ?? 'OK');
-                if ($exit !== '' && $exit !== 'OK') {
+                $taskData = $response['data'] ?? null;
+                if (! is_array($taskData)
+                    || ! array_key_exists('exitstatus', $taskData)
+                    || ! is_string($taskData['exitstatus'])
+                    || $taskData['exitstatus'] !== 'OK'
+                ) {
                     throw ProxmoxProviderException::failed('proxmox::messages.errors.create_failed');
                 }
 
                 return;
             }
             if ($status !== 'running') {
-                return;
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
             }
             sleep(1);
         }
@@ -147,7 +218,10 @@ final class HttpProxmoxApi implements ProxmoxApi
     {
         $url = ProxmoxApiUrl::normalize($this->apiUrl()).'/api2/json'.$path;
         $timeout = max(1, (int) $this->setting('timeout', 30));
-        $verify = filter_var($this->setting('verify_tls', true), FILTER_VALIDATE_BOOLEAN);
+        $verify = filter_var($this->setting('verify_tls', true), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($verify === null) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.invalid_mapping');
+        }
 
         try {
             $pending = Http::withHeaders([
@@ -225,8 +299,26 @@ final class HttpProxmoxApi implements ProxmoxApi
 
     private function setting(string $key, mixed $default = null): mixed
     {
-        return array_key_exists($key, $this->connection)
-            ? $this->connection[$key]
-            : $this->settings->get('proxmox', $key, $default);
+        if ($this->connection !== null) {
+            return array_key_exists($key, $this->connection)
+                ? $this->connection[$key]
+                : $default;
+        }
+
+        return $this->settings->get('proxmox', $key, $default);
+    }
+
+    private function positiveVmid(mixed $value): ?int
+    {
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+        if (! is_string($value) || preg_match('/^[1-9][0-9]*$/D', $value) !== 1) {
+            return null;
+        }
+
+        $vmid = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return $vmid === false ? null : $vmid;
     }
 }

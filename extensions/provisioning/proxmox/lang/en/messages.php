@@ -73,5 +73,6 @@ return [
         'unreachable' => 'Proxmox could not be reached.',
         'timeout' => 'Proxmox did not finish the task in time.',
         'malformed' => 'Proxmox returned an unexpected response.',
+        'out_of_stock' => 'This product is temporarily unavailable because the requested node capacity is full.',
     ],
 ];

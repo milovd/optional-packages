@@ -122,8 +122,11 @@ final class SubscriptionShow extends Component
 
     private function owns(Subscription $subscription, Customer $customer): bool
     {
-        return (int) $subscription->customer_id === (int) $customer->id
-            || $subscription->customer_email === $customer->email;
+        if ($subscription->customer_id !== null) {
+            return (int) $subscription->customer_id === (int) $customer->id;
+        }
+
+        return $subscription->customer_email === $customer->email;
     }
 
     private function refreshSubscription(): void

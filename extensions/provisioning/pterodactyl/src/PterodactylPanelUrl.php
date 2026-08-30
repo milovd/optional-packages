@@ -13,7 +13,11 @@ final class PterodactylPanelUrl
             throw PterodactylProviderException::failed('pterodactyl::messages.health.missing_url');
         }
 
-        $parts = parse_url($trimmed);
+        try {
+            $parts = parse_url($trimmed);
+        } catch (\ValueError) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.health.invalid_url');
+        }
         if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
             throw PterodactylProviderException::failed('pterodactyl::messages.health.invalid_url');
         }
@@ -26,13 +30,23 @@ final class PterodactylPanelUrl
         if (isset($parts['user']) || isset($parts['pass'])) {
             throw PterodactylProviderException::failed('pterodactyl::messages.health.invalid_url');
         }
+        if (isset($parts['path']) && $parts['path'] !== '' && $parts['path'] !== '/') {
+            throw PterodactylProviderException::failed('pterodactyl::messages.health.invalid_url');
+        }
+        if (isset($parts['query']) || isset($parts['fragment'])) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.health.invalid_url');
+        }
 
         $host = strtolower((string) $parts['host']);
         if ($host === '' || str_contains($host, '\\')) {
             throw PterodactylProviderException::failed('pterodactyl::messages.health.invalid_url');
         }
 
-        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+        $portNumber = $parts['port'] ?? null;
+        $port = $portNumber !== null
+            && ! (($scheme === 'http' && $portNumber === 80) || ($scheme === 'https' && $portNumber === 443))
+            ? ':'.$portNumber
+            : '';
 
         return $scheme.'://'.$host.$port;
     }

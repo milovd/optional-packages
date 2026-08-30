@@ -11,18 +11,16 @@ final class ProxmoxStatusMapper
      */
     public static function lifecycleStatus(array $status, bool $suspended = false): string
     {
+        $value = strtolower((string) ($status['status'] ?? ''));
+        if (! in_array($value, ['running', 'stopped'], true)) {
+            return 'manual_review';
+        }
+
         if ($suspended) {
             return 'suspended';
         }
 
-        $value = strtolower((string) ($status['status'] ?? ''));
-
-        return match ($value) {
-            'running' => 'active',
-            'stopped' => 'active',
-            '' => 'provisioning',
-            default => 'active',
-        };
+        return 'active';
     }
 
     /**
