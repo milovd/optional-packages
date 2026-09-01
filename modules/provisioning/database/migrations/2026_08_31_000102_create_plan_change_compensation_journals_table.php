@@ -41,6 +41,30 @@ return new class extends Migration
             ? $defaultConnection
             : (string) config('database.compensation_connection', 'compensation_journal');
 
+        $this->ensureSqliteDatabaseExists($connection);
+
         return Schema::connection($connection);
+    }
+
+    private function ensureSqliteDatabaseExists(string $connection): void
+    {
+        $databaseConfig = (array) config("database.connections.{$connection}", []);
+        if (($databaseConfig['driver'] ?? null) !== 'sqlite') {
+            return;
+        }
+
+        $database = $databaseConfig['database'] ?? null;
+        if (! is_string($database) || $database === '' || $database === ':memory:') {
+            return;
+        }
+
+        $directory = dirname($database);
+        if (! is_dir($directory) && ! mkdir($directory, 0750, true) && ! is_dir($directory)) {
+            throw new RuntimeException('Unable to create the compensation journal directory.');
+        }
+
+        if (! is_file($database) && file_put_contents($database, '', LOCK_EX) === false) {
+            throw new RuntimeException('Unable to create the compensation journal database.');
+        }
     }
 };

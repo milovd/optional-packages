@@ -12,6 +12,7 @@ return new class extends Migration
     {
         if (! Schema::hasColumn('provisioning_capacity_reservations', 'requirements_fingerprint')) {
             Schema::table('provisioning_capacity_reservations', function (Blueprint $table): void {
+                $table->index('order_id', 'capacity_reservations_order_idx');
                 $table->dropUnique('provisioning_capacity_reservation_unique');
                 $table->string('requirements_fingerprint', 64)->nullable()->after('requirements');
                 $table->unique(
@@ -26,12 +27,13 @@ return new class extends Migration
     {
         if (Schema::hasColumn('provisioning_capacity_reservations', 'requirements_fingerprint')) {
             Schema::table('provisioning_capacity_reservations', function (Blueprint $table): void {
-                $table->dropUnique('provisioning_capacity_reservation_vector_unique');
                 $table->unique(
                     ['order_id', 'product_id', 'provider_key', 'capacity_key'],
                     'provisioning_capacity_reservation_unique',
                 );
+                $table->dropUnique('provisioning_capacity_reservation_vector_unique');
                 $table->dropColumn('requirements_fingerprint');
+                $table->dropIndex('capacity_reservations_order_idx');
             });
         }
     }
