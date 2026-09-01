@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Extensions\Mollie;
 
 use Mollie\Api\Exceptions\ApiException;
+use Mollie\Api\Exceptions\NetworkRequestException;
 use Mollie\Api\Exceptions\RequestException;
 use Mollie\Api\MollieApiClient;
 use Mollie\Api\Resources\Method;
@@ -110,11 +111,13 @@ final class SdkMollieApi implements MollieApi
             $client->setApiKey($this->apiKey);
 
             return $callback($client);
+        } catch (NetworkRequestException $exception) {
+            throw MollieProviderException::unknown('mollie::messages.health.unreachable');
         } catch (ApiException|RequestException $exception) {
             throw MollieProviderException::failed('mollie::messages.errors.create_failed');
         } catch (Throwable $exception) {
             report($exception);
-            throw MollieProviderException::failed('mollie::messages.health.unreachable');
+            throw MollieProviderException::unknown('mollie::messages.health.unreachable');
         }
     }
 

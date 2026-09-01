@@ -15,11 +15,9 @@ use App\Agovena\Provisioning\ProvisionerRegistry;
 use App\Agovena\Provisioning\ProvisioningStockContext;
 use App\Agovena\Provisioning\ServiceInstanceInfo;
 use App\Models\Product;
-use Closure;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -32,11 +30,13 @@ final class ProvisioningOrchestrator
         private readonly ProvisionerRegistry $provisioners,
         private readonly ProvisioningService $provisioning,
         private readonly CapacityReservationService $reservations,
+        private readonly ServiceInstanceRuntimeSecretStore $serviceRuntimeSecrets,
+        private readonly ProvisioningInstanceMutex $instanceMutex,
     ) {}
 
     public function provision(ServiceInstance $instance): ServiceInstance
     {
-        return $this->withInstanceMutex($instance, function (ServiceInstance $current): ServiceInstance {
+        return $this->instanceMutex->run($instance, function (ServiceInstance $current): ServiceInstance {
             $deferredException = null;
             $result = $this->provisionLocked($current, $deferredException);
 
@@ -163,7 +163,7 @@ final class ProvisioningOrchestrator
 
     public function sync(ServiceInstance $instance): ServiceInstance
     {
-        return $this->withInstanceMutex($instance, fn (ServiceInstance $current): ServiceInstance => $this->syncLocked($current));
+        return $this->instanceMutex->run($instance, fn (ServiceInstance $current): ServiceInstance => $this->syncLocked($current));
     }
 
     private function syncLocked(ServiceInstance $instance): ServiceInstance
@@ -193,7 +193,7 @@ final class ProvisioningOrchestrator
 
     public function suspend(ServiceInstance $instance): ServiceInstance
     {
-        return $this->withInstanceMutex($instance, fn (ServiceInstance $current): ServiceInstance => $this->suspendLocked($current));
+        return $this->instanceMutex->run($instance, fn (ServiceInstance $current): ServiceInstance => $this->suspendLocked($current));
     }
 
     private function suspendLocked(ServiceInstance $instance): ServiceInstance
@@ -220,7 +220,7 @@ final class ProvisioningOrchestrator
 
     public function unsuspend(ServiceInstance $instance): ServiceInstance
     {
-        return $this->withInstanceMutex($instance, fn (ServiceInstance $current): ServiceInstance => $this->unsuspendLocked($current));
+        return $this->instanceMutex->run($instance, fn (ServiceInstance $current): ServiceInstance => $this->unsuspendLocked($current));
     }
 
     private function unsuspendLocked(ServiceInstance $instance): ServiceInstance
@@ -247,7 +247,7 @@ final class ProvisioningOrchestrator
 
     public function terminate(ServiceInstance $instance): ServiceInstance
     {
-        return $this->withInstanceMutex($instance, fn (ServiceInstance $current): ServiceInstance => $this->terminateLocked($current));
+        return $this->instanceMutex->run($instance, fn (ServiceInstance $current): ServiceInstance => $this->terminateLocked($current));
     }
 
     private function terminateLocked(ServiceInstance $instance): ServiceInstance
@@ -272,11 +272,13 @@ final class ProvisioningOrchestrator
     }
 
     /** @param string|array<string, mixed> $plan */
-    public function changePlan(ServiceInstance $instance, string|array $plan): ServiceInstance
+    public function changePlan(ServiceInstance $instance, string|array $plan, bool $instanceMutexHeld = false): ServiceInstance
     {
         $target = $this->normalizePlan($instance, $plan);
 
-        return $this->withInstanceMutex($instance, fn (ServiceInstance $current): ServiceInstance => $this->changePlanLocked($current, $target));
+        return $instanceMutexHeld
+            ? $this->changePlanLocked($instance, $target)
+            : $this->instanceMutex->run($instance, fn (ServiceInstance $current): ServiceInstance => $this->changePlanLocked($current, $target));
     }
 
     /** @param array<string, mixed> $plan */
@@ -298,12 +300,13 @@ final class ProvisioningOrchestrator
         $previousRequirements = is_array($plan['previous_requirements'] ?? null) ? $plan['previous_requirements'] : null;
         $previousProductId = is_numeric($plan['previous_product_id'] ?? null) ? (int) $plan['previous_product_id'] : null;
         $previousProviderKey = is_string($plan['previous_provider_key'] ?? null) ? $plan['previous_provider_key'] : null;
-        $previousProviderSettings = is_array($plan['previous_provider_settings'] ?? null)
-            ? $plan['previous_provider_settings']
-            : $instance->provider_settings_snapshot;
-        $previousServerSettings = is_array($plan['previous_server_settings'] ?? null)
-            ? $plan['previous_server_settings']
-            : (is_array($instance->server_settings_snapshot) ? $instance->server_settings_snapshot : null);
+        $runtimeSettings = $this->serviceRuntimeSecrets->get($instance->id);
+        $previousProviderSettings = array_key_exists('previous_provider_settings', $plan)
+            ? (is_array($plan['previous_provider_settings']) ? $plan['previous_provider_settings'] : null)
+            : ($runtimeSettings['provider_settings'] ?? $instance->provider_settings_snapshot);
+        $previousServerSettings = array_key_exists('previous_server_settings', $plan)
+            ? (is_array($plan['previous_server_settings']) ? $plan['previous_server_settings'] : null)
+            : ($runtimeSettings['server_settings'] ?? (is_array($instance->server_settings_snapshot) ? $instance->server_settings_snapshot : null));
         $providerMutationAttempted = false;
         try {
             $info = EloquentProvisionedServiceResolver::info($instance);
@@ -323,13 +326,18 @@ final class ProvisioningOrchestrator
             $provisioner->changePlan($info, $plan);
             $syncInstance = $instance->fresh() ?? $instance;
             $syncMeta = is_array($syncInstance->meta) ? $syncInstance->meta : [];
+            $nextProviderSettings = $previousProviderSettings;
+            $nextServerSettings = $previousServerSettings;
             if (is_array($plan['provider_settings'] ?? null)) {
-                $syncInstance->provider_settings_snapshot = $plan['provider_settings'];
+                $nextProviderSettings = $plan['provider_settings'];
                 $syncMeta['provider_settings'] = EloquentProvisionedServiceResolver::sanitizePersistedMeta($plan['provider_settings']);
             }
             if (is_array($plan['server_settings'] ?? null)) {
-                $syncInstance->server_settings_snapshot = $plan['server_settings'];
+                $nextServerSettings = $plan['server_settings'];
             }
+            $this->serviceRuntimeSecrets->put($syncInstance->id, $nextServerSettings, $nextProviderSettings);
+            $syncInstance->provider_settings_snapshot = null;
+            $syncInstance->server_settings_snapshot = null;
             $syncInstance->meta = $syncMeta;
             $updated = $provisioner->syncStatus(EloquentProvisionedServiceResolver::info($syncInstance));
             if (! in_array($updated->status, ['active', 'suspended'], true)) {
@@ -419,14 +427,16 @@ final class ProvisioningOrchestrator
         ?array $previousServerSettings,
         ?int $previousProductId,
     ): bool {
-        if (! $providerMutationAttempted || $previousProviderSettings === null
+        if (! $providerMutationAttempted
             || ($previousProviderKey !== null && $previousProviderKey !== $provisioner->id())
         ) {
             return true;
         }
 
         $rollbackMeta = $info->meta;
-        $rollbackMeta['provider_settings'] = EloquentProvisionedServiceResolver::sanitizePersistedMeta($previousProviderSettings);
+        if ($previousProviderSettings !== null) {
+            $rollbackMeta['provider_settings'] = EloquentProvisionedServiceResolver::sanitizePersistedMeta($previousProviderSettings);
+        }
         if ($previousServerSettings !== null) {
             $rollbackMeta['server_settings'] = $previousServerSettings;
         }
@@ -444,10 +454,11 @@ final class ProvisioningOrchestrator
         try {
             $provisioner->changePlan($rollbackInfo, [
                 'id' => (string) ($previousProductId ?? $instance->product_id),
-                'provider_settings' => $previousProviderSettings,
+                'provider_settings' => $previousProviderSettings ?? [],
                 'server_settings' => $previousServerSettings,
             ]);
             $provisioner->syncStatus($rollbackInfo);
+
             return true;
         } catch (Throwable $rollbackException) {
             report($rollbackException);
@@ -464,6 +475,7 @@ final class ProvisioningOrchestrator
                 $instance,
                 __('provisioning::errors.provider_failed'),
             );
+
             return false;
         }
     }
@@ -472,7 +484,9 @@ final class ProvisioningOrchestrator
     private function normalizePlan(ServiceInstance $instance, string|array $plan): array
     {
         $meta = is_array($instance->meta) ? $instance->meta : [];
-        $settings = $instance->providerSettings ?? $instance->provider_settings_snapshot ?? [];
+        $runtimeSettings = $this->serviceRuntimeSecrets->get($instance->id);
+        $settings = $runtimeSettings['provider_settings']
+            ?? (is_array($instance->provider_settings_snapshot) ? $instance->provider_settings_snapshot : []);
         $requirements = is_array($meta['provisioning_capacity_requirements'] ?? null)
             ? $meta['provisioning_capacity_requirements']
             : [];
@@ -522,18 +536,9 @@ final class ProvisioningOrchestrator
         return $normalized;
     }
 
-    private function withInstanceMutex(ServiceInstance $instance, Closure $callback): ServiceInstance
+    public function assertSharedInstanceLockDriver(): void
     {
-        $lock = Cache::lock('agovena:provisioning:instance:'.$instance->id, 900);
-        $lock->block(10);
-
-        try {
-            $current = DB::transaction(fn (): ?ServiceInstance => ServiceInstance::query()->lockForUpdate()->find($instance->id));
-
-            return $current instanceof ServiceInstance ? $callback($current) : $instance;
-        } finally {
-            optional($lock)->release();
-        }
+        $this->instanceMutex->assertSharedLockDriver();
     }
 
     private function revalidateCapacity(
@@ -617,7 +622,7 @@ final class ProvisioningOrchestrator
     }
 
     /**
-     * @param array<string, mixed> $plan
+     * @param  array<string, mixed>  $plan
      * @return array{0: string, 1: array<string, int|string>, 2: bool}
      */
     private function revalidatePlanCapacity(
@@ -642,10 +647,10 @@ final class ProvisioningOrchestrator
 
         $providerSettings = is_array($plan['provider_settings'] ?? null) ? $plan['provider_settings'] : [];
         $capacityKey = $provisioner->capacityKeyForSettings(
-                $providerSettings,
-                is_int($plan['server_id'] ?? null) ? $plan['server_id'] : $instance->provisioning_server_id,
-                $serverSettings,
-            ) ?: '';
+            $providerSettings,
+            is_int($plan['server_id'] ?? null) ? $plan['server_id'] : $instance->provisioning_server_id,
+            $serverSettings,
+        ) ?: '';
         if ($capacityKey === '' || $instance->order_id === null || $instance->product_id === null || $instance->provider_key === null) {
             throw ValidationException::withMessages([
                 'instance' => __('provisioning::errors.provider_failed'),

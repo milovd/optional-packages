@@ -95,11 +95,15 @@ final class SdkStripeApi implements StripeApi
         } catch (StripeProviderException $exception) {
             throw $exception;
         } catch (ApiConnectionException) {
-            throw StripeProviderException::failed('stripe::messages.health.unreachable');
+            throw $method === 'post'
+                ? StripeProviderException::unknown('stripe::messages.health.unreachable')
+                : StripeProviderException::failed('stripe::messages.health.unreachable');
         } catch (ApiErrorException) {
             throw StripeProviderException::failed('stripe::messages.errors.create_failed');
         } catch (Throwable) {
-            throw StripeProviderException::failed('stripe::messages.health.unreachable');
+            throw $method === 'post'
+                ? StripeProviderException::unknown('stripe::messages.health.unreachable')
+                : StripeProviderException::failed('stripe::messages.health.unreachable');
         }
 
         return $this->toArray($result);

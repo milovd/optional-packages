@@ -8,8 +8,10 @@ use Agovena\Modules\Provisioning\CapacityReservationService;
 use Agovena\Modules\Provisioning\EloquentProvisionedServiceResolver;
 use Agovena\Modules\Provisioning\Enums\ServiceInstanceStatus;
 use Agovena\Modules\Provisioning\Models\ServiceInstance;
+use Agovena\Modules\Provisioning\PlanChangeCompensationJournal;
 use Agovena\Modules\Provisioning\ProvisioningOrchestrator;
 use Agovena\Modules\Provisioning\ProvisioningService;
+use Agovena\Modules\Provisioning\ServiceInstanceRuntimeSecretStore;
 use App\Agovena\Provisioning\Contracts\ChecksProvisioningStock;
 use App\Agovena\Provisioning\Contracts\ProvidesProvisioningCapacityRequirements;
 use App\Agovena\Provisioning\Contracts\ProvisionerLifecycle;
@@ -18,6 +20,7 @@ use App\Agovena\Provisioning\ServiceInstanceInfo;
 use App\Events\PlanChangeApplied;
 use App\Models\Product;
 use App\Models\ProvisioningServer;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -27,6 +30,8 @@ final class ApplyPlanChangeToService
         private readonly ProvisioningService $provisioning,
         private readonly ProvisionerRegistry $provisioners,
         private readonly CapacityReservationService $reservations,
+        private readonly PlanChangeCompensationJournal $compensations,
+        private readonly ServiceInstanceRuntimeSecretStore $serviceRuntimeSecrets,
     ) {}
 
     public function handle(PlanChangeApplied $event): void
@@ -76,7 +81,7 @@ final class ApplyPlanChangeToService
                 ->where('provider_key', $providerKey)
                 ->find($serverId)
             : null;
-        $serverSettingsSnapshot = $server !== null && is_array($server->settings)
+        $serverSettings = $server !== null && is_array($server->settings)
             ? $server->settings
             : null;
         $provider = $providerKey !== null ? $this->provisioners->get($providerKey) : null;
@@ -98,7 +103,7 @@ final class ApplyPlanChangeToService
             ]);
         }
         $capacityKey = $provider instanceof ChecksProvisioningStock
-            ? $provider->capacityKeyForSettings($providerSettings, $serverId, $serverSettingsSnapshot)
+            ? $provider->capacityKeyForSettings($providerSettings, $serverId, $serverSettings)
             : '';
         if ($provider instanceof ChecksProvisioningStock && $capacityKey === '') {
             throw ValidationException::withMessages([
@@ -106,22 +111,35 @@ final class ApplyPlanChangeToService
             ]);
         }
         $requirements = $provider instanceof ProvidesProvisioningCapacityRequirements
-            ? $provider->capacityRequirements($providerSettings, $serverSettingsSnapshot)
+            ? $provider->capacityRequirements($providerSettings, $serverSettings)
             : [];
         $providerSettingsSnapshot = $this->provisioning->providerSettingsSnapshot($provider, $providerSettings);
 
-
-        $instances = ServiceInstance::query()
-            ->where('subscription_id', $subscriptionId)
-            ->where('status', '!=', ServiceInstanceStatus::Terminated->value)
-            ->lockForUpdate()
-            ->get();
-
         $orchestrator = app(ProvisioningOrchestrator::class);
+        $orchestrator->assertSharedInstanceLockDriver();
+        $locks = [];
+        $lockedInstanceIds = [];
         $snapshots = [];
         $changed = [];
 
         try {
+            do {
+                $instances = ServiceInstance::query()
+                    ->where('subscription_id', $subscriptionId)
+                    ->where('status', '!=', ServiceInstanceStatus::Terminated->value)
+                    ->lockForUpdate()
+                    ->get();
+                $newInstances = $instances->reject(
+                    fn (ServiceInstance $instance): bool => in_array($instance->id, $lockedInstanceIds, true),
+                );
+                foreach ($newInstances as $instance) {
+                    $lock = Cache::lock('agovena:provisioning:instance:'.$instance->id, 900);
+                    $lock->block(10);
+                    $locks[] = $lock;
+                    $lockedInstanceIds[] = $instance->id;
+                }
+            } while ($newInstances->isNotEmpty());
+
             foreach ($instances as $instance) {
                 $previousState = [
                     'status' => $instance->status,
@@ -129,7 +147,7 @@ final class ApplyPlanChangeToService
                     'provider_key' => $instance->provider_key,
                     'provisioning_server_id' => $instance->provisioning_server_id,
                     'external_ref' => $instance->external_ref,
-                    'server_settings_snapshot' => $instance->server_settings_snapshot,
+                    'server_settings_snapshot' => null,
                     'meta' => $instance->meta,
                     'provisioning_at' => $instance->provisioning_at,
                     'activated_at' => $instance->activated_at,
@@ -142,6 +160,7 @@ final class ApplyPlanChangeToService
                 $previousInfo = EloquentProvisionedServiceResolver::info($instance);
                 $previousProviderSettings = $previousInfo->providerSettings;
                 $previousServerSettings = $previousInfo->serverSettings;
+                $this->serviceRuntimeSecrets->put($instance->id, $previousServerSettings, $previousProviderSettings);
                 if ($previousState['provider_key'] !== $providerKey) {
                     throw ValidationException::withMessages([
                         'plan' => __('provisioning::errors.provider_failed'),
@@ -174,23 +193,46 @@ final class ApplyPlanChangeToService
                 $meta['provisioning_capacity_requirements'] = $requirements;
                 $instance->product_id = $to->id;
                 $instance->provisioning_server_id = $serverId;
-                $instance->server_settings_snapshot = $serverSettingsSnapshot;
-                $instance->provider_settings_snapshot = $providerSettings;
+                $instance->server_settings_snapshot = null;
+                $instance->provider_settings_snapshot = null;
                 $instance->provider_key = $providerKey;
                 $instance->failure_message = null;
                 $instance->meta = $meta;
                 $instance->save();
+                $this->serviceRuntimeSecrets->put($instance->id, $serverSettings, $providerSettings);
 
                 $changed[] = $instance->id;
 
                 if ($provider instanceof ProvisionerLifecycle) {
+                    $journalPath = $this->compensations->prepare(
+                        requestId: $event->request->id,
+                        instanceId: $instance->id,
+                        providerKey: $providerKey,
+                        previousState: $previousState,
+                        previousInfo: $previousInfo,
+                        appliedState: [
+                            'status' => $instance->status,
+                            'product_id' => $instance->product_id,
+                            'provider_key' => $instance->provider_key,
+                            'provisioning_server_id' => $instance->provisioning_server_id,
+                            'external_ref' => $instance->external_ref,
+                            'server_settings_snapshot' => null,
+                            'meta' => $instance->meta,
+                            'provisioning_at' => $instance->provisioning_at,
+                            'activated_at' => $instance->activated_at,
+                            'suspended_at' => $instance->suspended_at,
+                            'terminated_at' => $instance->terminated_at,
+                            'failed_at' => $instance->failed_at,
+                            'failure_message' => $instance->failure_message,
+                        ],
+                    );
                     $orchestrator->changePlan($instance->fresh() ?? $instance, [
                         'id' => (string) $to->id,
                         'product_id' => $to->id,
                         'provider_key' => $providerKey,
                         'provider_settings' => $providerSettings,
                         'server_id' => $serverId,
-                        'server_settings' => $serverSettingsSnapshot,
+                        'server_settings' => $serverSettings,
                         'capacity_key' => $capacityKey !== '' ? $capacityKey : null,
                         'requirements' => $requirements,
                         'previous_capacity_key' => $previousCapacityKey,
@@ -199,13 +241,14 @@ final class ApplyPlanChangeToService
                         'previous_provider_key' => $previousState['provider_key'],
                         'previous_provider_settings' => $previousProviderSettings,
                         'previous_server_settings' => $previousServerSettings,
-                    ]);
+                    ], instanceMutexHeld: true);
                     $event->registerCompensation(function () use (
                         $provider,
                         $previousInfo,
                         $previousState,
                         $previousProviderSettings,
                         $previousServerSettings,
+                        $journalPath,
                     ): void {
                         $rollbackMeta = $previousInfo->meta;
                         if ($previousProviderSettings !== null) {
@@ -222,6 +265,7 @@ final class ApplyPlanChangeToService
                             externalRef: $previousInfo->externalRef,
                             meta: $rollbackMeta,
                             serverSettings: $previousServerSettings,
+                            providerSettings: $previousProviderSettings,
                         );
                         $provider->changePlan($rollbackInfo, [
                             'id' => (string) ($previousState['product_id'] ?? ''),
@@ -229,7 +273,9 @@ final class ApplyPlanChangeToService
                             'server_settings' => $previousServerSettings,
                         ]);
                         $provider->syncStatus($rollbackInfo);
+                        $this->compensations->forget($journalPath);
                     });
+                    $this->compensations->markApplied($journalPath);
                 } elseif ($provider->id() === 'manual') {
                     if ($previousCapacityKey !== null
                         && is_numeric($previousState['product_id'])
@@ -271,9 +317,18 @@ final class ApplyPlanChangeToService
                 }
             }
             foreach ($snapshots as $instanceId => $snapshot) {
+                $this->serviceRuntimeSecrets->put(
+                    (int) $instanceId,
+                    $snapshot['previous_server_settings'],
+                    $snapshot['previous_provider_settings'],
+                );
                 $this->restoreState((int) $instanceId, $snapshot['state']);
             }
             throw $exception;
+        } finally {
+            foreach (array_reverse($locks) as $lock) {
+                $lock->release();
+            }
         }
     }
 

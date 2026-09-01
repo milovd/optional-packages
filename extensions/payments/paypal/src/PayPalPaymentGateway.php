@@ -101,11 +101,18 @@ final class PayPalPaymentGateway implements CancelsPayments, OffersCheckoutMetho
 
         try {
             $order = $api->createOrder($payload, $request->idempotencyKey);
-        } catch (PayPalProviderException) {
+        } catch (PayPalProviderException $exception) {
             Log::warning('payment.initiate.failed', [
                 'gateway_id' => self::ID,
                 'order_id' => $request->order->id,
             ]);
+
+            if ($exception->unknownOutcome) {
+                return PaymentInitiationResult::unknown(
+                    metadata: ['reason' => 'provider_transport_unknown'],
+                    message: __('paypal::messages.errors.create_failed'),
+                );
+            }
 
             return PaymentInitiationResult::failed(__('paypal::messages.errors.create_failed'));
         }
@@ -227,11 +234,26 @@ final class PayPalPaymentGateway implements CancelsPayments, OffersCheckoutMetho
                 ],
                 'note_to_payer' => $request->reason ?: $request->payment->order?->number,
             ], $request->idempotencyKey);
-        } catch (PayPalProviderException) {
+        } catch (PayPalProviderException $exception) {
+            if ($exception->unknownOutcome) {
+                return RefundResult::unknown(
+                    ['reason' => 'provider_transport_unknown'],
+                    __('paypal::messages.errors.refund_failed'),
+                );
+            }
+
             return RefundResult::fail(__('paypal::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok((string) ($refund['id'] ?? ''));
+        $externalRefundId = $refund['id'] ?? null;
+        if (! is_string($externalRefundId) || trim($externalRefundId) === '') {
+            return RefundResult::unknown(
+                ['reason' => 'provider_response_invalid'],
+                __('paypal::messages.errors.refund_failed'),
+            );
+        }
+
+        return RefundResult::ok($externalRefundId);
     }
 
     public function syncStatus(Payment $payment): Payment
@@ -262,7 +284,7 @@ final class PayPalPaymentGateway implements CancelsPayments, OffersCheckoutMetho
         return $payment->fresh() ?? $payment;
     }
 
-    public function cancel(Payment $payment): Payment
+    public function cancel(Payment $payment, ?PaymentAttempt $attempt = null): Payment
     {
         throw ValidationException::withMessages([
             'payment' => __('paypal::messages.errors.cancel_unsupported'),

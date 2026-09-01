@@ -91,6 +91,26 @@ final class HttpProxmoxApi implements ProxmoxApi
 
     public function deleteVm(string $node, int $vmid): void
     {
+        $shouldStop = true;
+        try {
+            $status = $this->currentStatus($node, $vmid)['status'];
+            if ($status === 'stopped') {
+                $shouldStop = false;
+            } elseif ($status !== 'running') {
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
+            }
+        } catch (ProxmoxProviderException $exception) {
+            if ($exception->status !== 404) {
+                throw $exception;
+            }
+        }
+
+        if (! $shouldStop) {
+            $this->deleteAndWait($node, $vmid);
+
+            return;
+        }
+
         try {
             $this->stop($node, $vmid);
         } catch (ProxmoxProviderException $exception) {
@@ -99,7 +119,21 @@ final class HttpProxmoxApi implements ProxmoxApi
             }
         }
 
-        $response = $this->request('DELETE', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid);
+        $this->deleteAndWait($node, $vmid);
+    }
+
+    private function deleteAndWait(string $node, int $vmid): void
+    {
+        try {
+            $response = $this->request('DELETE', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid);
+        } catch (ProxmoxProviderException $exception) {
+            if ($exception->status === 404) {
+                return;
+            }
+
+            throw $exception;
+        }
+
         $this->waitForTask($node, $this->taskId($response, 'delete'), maxAttempts: 60);
     }
 
@@ -175,7 +209,7 @@ final class HttpProxmoxApi implements ProxmoxApi
         }
 
         $taskId = trim($taskId);
-        if (preg_match('/\AUPID:[^:\s]+(?::[^:\s]+){6,8}:\z/D', $taskId) !== 1) {
+        if (preg_match('/\AUPID:[^:\s]+(?::[^:\s]+){5,8}:\z/D', $taskId) !== 1) {
             throw ProxmoxProviderException::failed($errorKey);
         }
 

@@ -307,7 +307,7 @@ final class AssertProvisioningStockBeforeOrderPlacing
             foreach ($this->options->snapshot($product, $selections) as $option) {
                 $key = isset($option['key']) ? (string) $option['key'] : '';
                 try {
-                    $value = $this->options->runtimeValue($option);
+                    $value = $this->options->runtimeValueForSelection($product, $key, $selections);
                 } catch (Throwable) {
                     throw ValidationException::withMessages([
                         'cart' => __('provisioning::errors.provider_unavailable'),

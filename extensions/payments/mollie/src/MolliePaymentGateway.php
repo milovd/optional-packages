@@ -107,11 +107,18 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
         try {
             $created = $api->createPayment($payload, $request->idempotencyKey);
-        } catch (MollieProviderException) {
+        } catch (MollieProviderException $exception) {
             Log::warning('payment.initiate.failed', [
                 'gateway_id' => self::ID,
                 'order_id' => $request->order->id,
             ]);
+
+            if ($exception->unknownOutcome) {
+                return PaymentInitiationResult::unknown(
+                    metadata: ['reason' => 'provider_transport_unknown'],
+                    message: __('mollie::messages.errors.create_failed'),
+                );
+            }
 
             return PaymentInitiationResult::failed(__('mollie::messages.errors.create_failed'));
         }
@@ -121,11 +128,19 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             return PaymentInitiationResult::failed(__('mollie::messages.errors.create_failed'));
         }
 
+        $externalId = $created['id'] ?? null;
+        if (! is_string($externalId) || trim($externalId) === '') {
+            return PaymentInitiationResult::unknown(
+                metadata: ['reason' => 'provider_response_invalid'],
+                message: __('mollie::messages.errors.create_failed'),
+            );
+        }
+
         $this->rememberMandate($request, $created);
 
         return PaymentInitiationResult::redirect(
             url: $checkout,
-            externalId: (string) ($created['id'] ?? ''),
+            externalId: $externalId,
             metadata: [
                 'provider_status' => (string) ($created['status'] ?? ''),
                 'mode' => (string) ($created['mode'] ?? ''),
@@ -173,20 +188,35 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                     'payment_id' => $request->payment->id,
                 ],
             ], $request->idempotencyKey);
-        } catch (MollieProviderException) {
+        } catch (MollieProviderException $exception) {
+            if ($exception->unknownOutcome) {
+                return PaymentInitiationResult::unknown(
+                    metadata: ['reason' => 'provider_transport_unknown'],
+                    message: __('mollie::messages.errors.create_failed'),
+                );
+            }
+
             return PaymentInitiationResult::failed(__('mollie::messages.errors.create_failed'));
+        }
+
+        $externalId = $created['id'] ?? null;
+        if (! is_string($externalId) || trim($externalId) === '') {
+            return PaymentInitiationResult::unknown(
+                metadata: ['reason' => 'provider_response_invalid'],
+                message: __('mollie::messages.errors.create_failed'),
+            );
         }
 
         $status = MollieStatusMapper::map((string) ($created['status'] ?? 'open'));
         if ($status === PaymentStatus::Paid) {
             return PaymentInitiationResult::completed(
-                externalId: (string) ($created['id'] ?? ''),
+                externalId: $externalId,
                 metadata: ['provider_status' => (string) ($created['status'] ?? '')],
             );
         }
 
         return PaymentInitiationResult::pending(
-            externalId: (string) ($created['id'] ?? ''),
+            externalId: $externalId,
             metadata: ['provider_status' => (string) ($created['status'] ?? '')],
         );
     }
@@ -261,11 +291,26 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                 ],
                 'description' => $request->reason ?: $request->payment->order?->number,
             ], $request->idempotencyKey);
-        } catch (MollieProviderException) {
+        } catch (MollieProviderException $exception) {
+            if ($exception->unknownOutcome) {
+                return RefundResult::unknown(
+                    ['reason' => 'provider_transport_unknown'],
+                    __('mollie::messages.errors.refund_failed'),
+                );
+            }
+
             return RefundResult::fail(__('mollie::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok((string) ($refund['id'] ?? ''));
+        $externalRefundId = $refund['id'] ?? null;
+        if (! is_string($externalRefundId) || trim($externalRefundId) === '') {
+            return RefundResult::unknown(
+                ['reason' => 'provider_response_invalid'],
+                __('mollie::messages.errors.refund_failed'),
+            );
+        }
+
+        return RefundResult::ok($externalRefundId);
     }
 
     public function syncStatus(Payment $payment): Payment
@@ -297,7 +342,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
         return $payment->fresh() ?? $payment;
     }
 
-    public function cancel(Payment $payment): Payment
+    public function cancel(Payment $payment, ?PaymentAttempt $attempt = null): Payment
     {
         $api = $this->client();
         if ($api === null) {
@@ -306,7 +351,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             ]);
         }
 
-        $attempt = $this->latestExternalAttempt($payment);
+        $attempt ??= $this->latestExternalAttempt($payment);
         if ($attempt?->external_id === null) {
             throw ValidationException::withMessages([
                 'payment' => __('mollie::messages.errors.cancel_unsupported'),

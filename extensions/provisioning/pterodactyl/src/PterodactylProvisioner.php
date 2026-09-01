@@ -855,6 +855,7 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
     /** @param array<string, mixed> $settings @return array<string, mixed> */
     private function settingsWithProductDefaults(array $settings): array
     {
+        $this->assertNoRedactionPlaceholder($settings);
         foreach (['location_id', 'nest_id', 'egg_id', 'memory', 'swap', 'disk', 'io', 'cpu', 'databases', 'allocations', 'backups'] as $key) {
             if (array_key_exists($key, $settings)
                 && $settings[$key] !== null
@@ -892,6 +893,22 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
         }
 
         return trim($settings[$key]);
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function assertNoRedactionPlaceholder(array $settings): void
+    {
+        foreach ($settings as $value) {
+            if (is_array($value)) {
+                $this->assertNoRedactionPlaceholder($value);
+                continue;
+            }
+            if ($value === '[REDACTED]') {
+                throw ValidationException::withMessages([
+                    'instance' => __('pterodactyl::messages.errors.not_configured'),
+                ]);
+            }
+        }
     }
 
     /** @param array<string, mixed> $server @param list<string> $keys */

@@ -73,12 +73,13 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
 
         $packageMap = $this->packageMap();
         $packages = [];
+        $ident = null;
         foreach ($request->order->items as $item) {
             $packageId = $packageMap[(string) $item->product_id] ?? null;
             if (! is_string($packageId) || $packageId === '') {
                 return PaymentInitiationResult::failed(__('tebex::messages.errors.package_mapping_missing'));
             }
-            $packages[] = [$packageId, max(1, (int) $item->quantity)];
+            $packages[$packageId] = ($packages[$packageId] ?? 0) + max(1, (int) $item->quantity);
         }
 
         try {
@@ -89,22 +90,46 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
                 'custom' => [
                     'order_id' => (string) $request->order->id,
                     'payment_id' => (string) $request->payment->id,
+                    'attempt_key' => $request->idempotencyKey,
                 ],
-            ]);
+            ], $request->idempotencyKey);
             $ident = (string) ($basket['ident'] ?? $basket['id'] ?? '');
             if ($ident === '') {
                 return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
             }
 
-            foreach ($packages as [$packageId, $quantity]) {
-                $api->addPackage($ident, $packageId, $quantity);
+            $basket = $api->getBasket($ident);
+            $existingPackages = $this->basketPackageQuantities($basket);
+            foreach ($packages as $packageId => $quantity) {
+                $packageId = (string) $packageId;
+                $missingQuantity = max(0, $quantity - ($existingPackages[$packageId] ?? 0));
+                if ($missingQuantity === 0) {
+                    continue;
+                }
+
+                $api->addPackage(
+                    $ident,
+                    $packageId,
+                    $missingQuantity,
+                    $request->idempotencyKey !== null && $request->idempotencyKey !== ''
+                        ? $request->idempotencyKey.':package:'.$packageId
+                        : null,
+                );
+                $existingPackages[$packageId] = ($existingPackages[$packageId] ?? 0) + $missingQuantity;
             }
             $basket = $api->getBasket($ident);
-        } catch (TebexProviderException) {
+        } catch (TebexProviderException $exception) {
             Log::warning('payment.initiate.failed', [
                 'gateway_id' => self::ID,
                 'order_id' => $request->order->id,
             ]);
+
+            if ($exception->unknownOutcome) {
+                return PaymentInitiationResult::unknown(metadata: array_filter([
+                    'provider_outcome' => 'unknown',
+                    'basket_ident' => $ident,
+                ]));
+            }
 
             return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
         }
@@ -244,8 +269,12 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         }
 
         try {
-            $refund = $api->refundPayment($attempt->external_id, $request->reason);
-        } catch (TebexProviderException) {
+            $refund = $api->refundPayment($attempt->external_id, $request->reason, $request->idempotencyKey);
+        } catch (TebexProviderException $exception) {
+            if ($exception->unknownOutcome) {
+                return RefundResult::unknown(['provider_outcome' => 'unknown']);
+            }
+
             return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
         }
 
@@ -320,6 +349,25 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         }
 
         return $map;
+    }
+
+    /** @return array<string, int> */
+    private function basketPackageQuantities(array $basket): array
+    {
+        $quantities = [];
+        foreach ((array) ($basket['packages'] ?? []) as $package) {
+            if (! is_array($package)) {
+                continue;
+            }
+            $packageId = $package['id'] ?? (is_array($package['package'] ?? null) ? $package['package']['id'] ?? null : null);
+            $quantity = $package['quantity'] ?? $package['qty'] ?? null;
+            if (! is_scalar($packageId) || ! is_numeric($quantity)) {
+                continue;
+            }
+            $quantities[(string) $packageId] = ($quantities[(string) $packageId] ?? 0) + max(0, (int) $quantity);
+        }
+
+        return $quantities;
     }
 
     private function projectId(): ?string

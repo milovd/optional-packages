@@ -81,9 +81,13 @@ final class HttpPayPalApi implements PayPalApi
         } catch (PayPalProviderException $exception) {
             throw $exception;
         } catch (ConnectionException) {
-            throw PayPalProviderException::failed('paypal::messages.health.unreachable');
+            throw strtoupper($method) === 'POST'
+                ? PayPalProviderException::unknown('paypal::messages.health.unreachable')
+                : PayPalProviderException::failed('paypal::messages.health.unreachable');
         } catch (Throwable) {
-            throw PayPalProviderException::failed('paypal::messages.errors.provider_failed');
+            throw strtoupper($method) === 'POST'
+                ? PayPalProviderException::unknown('paypal::messages.errors.provider_failed')
+                : PayPalProviderException::failed('paypal::messages.errors.provider_failed');
         }
 
         return $this->decode($response);

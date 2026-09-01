@@ -67,7 +67,10 @@ final class ServiceShow extends Component
 
     private function owns(ServiceInstance $instance, Customer $customer): bool
     {
-        return (int) $instance->customer_id === (int) $customer->id
-            || $instance->customer_email === $customer->email;
+        if ($instance->customer_id !== null) {
+            return (int) $instance->customer_id === (int) $customer->id;
+        }
+
+        return $instance->customer_email === $customer->email;
     }
 }

@@ -20,7 +20,10 @@ final class DownloadController
             ->where('token', $token)
             ->where(function ($q) use ($customer): void {
                 $q->where('customer_id', $customer->id)
-                    ->orWhere('customer_email', $customer->email);
+                    ->orWhere(function ($legacy) use ($customer): void {
+                        $legacy->whereNull('customer_id')
+                            ->where('customer_email', $customer->email);
+                    });
             })
             ->firstOrFail();
 

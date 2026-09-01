@@ -10,6 +10,7 @@ use App\Agovena\Provisioning\ServiceInstanceInfo;
 use App\Agovena\Security\SensitiveDataRedactor;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 final class EloquentProvisionedServiceResolver implements ResolvesProvisionedServices
@@ -35,9 +36,12 @@ final class EloquentProvisionedServiceResolver implements ResolvesProvisionedSer
         $persistedMeta = is_array($instance->meta) ? $instance->meta : [];
         $meta = self::sanitizePersistedMeta($persistedMeta);
         $serverSettings = null;
+        $runtimeSettings = Schema::hasTable('service_instance_runtime_secrets')
+            ? app(ServiceInstanceRuntimeSecretStore::class)->get($instance->id)
+            : null;
         try {
-            $providerSnapshot = $instance->provider_settings_snapshot;
-            $serverSnapshot = $instance->server_settings_snapshot;
+            $providerSnapshot = $runtimeSettings['provider_settings'] ?? $instance->provider_settings_snapshot;
+            $serverSnapshot = $runtimeSettings['server_settings'] ?? $instance->server_settings_snapshot;
         } catch (Throwable) {
             $providerSnapshot = null;
             $serverSnapshot = null;

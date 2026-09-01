@@ -14,6 +14,8 @@ use App\Agovena\Provisioning\Contracts\ConfiguresProvisionedProducts;
 use App\Agovena\Provisioning\Contracts\PollsProvisionedInstances;
 use App\Agovena\Provisioning\Contracts\ProvidesProvisioningCapacityRequirements;
 use App\Agovena\Provisioning\ProvisionerRegistry;
+use App\Agovena\Security\OrderItemRuntimeSecretStore;
+use Agovena\Modules\Provisioning\ServiceInstanceRuntimeSecretStore;
 use App\Events\OrderPreflight;
 use App\Models\Order;
 use App\Models\Product;
@@ -32,6 +34,8 @@ final class ProvisioningService implements PollsProvisionedInstances
         private readonly ProvisionerRegistry $provisioners,
         private readonly CapacityReservationService $reservations,
         private readonly ProductOptionPricer $options,
+        private readonly OrderItemRuntimeSecretStore $runtimeSecrets,
+        private readonly ServiceInstanceRuntimeSecretStore $serviceRuntimeSecrets,
     ) {}
 
     public function snapshotOrderConfiguration(Order $order, ?OrderPreflight $preflight = null): void
@@ -137,7 +141,7 @@ final class ProvisioningService implements PollsProvisionedInstances
                 ? $config['provider_settings']
                 : [];
             $optionsSnapshot = is_array($item->options_snapshot) ? $item->options_snapshot : [];
-            $providerSettings = $this->applyOptionOverrides($providerKey, $providerSettings, $optionsSnapshot);
+            $providerSettings = $this->applyOptionOverrides($providerKey, $providerSettings, $optionsSnapshot, $item->id);
             $provider = $providerKey !== null ? $this->provisioners->get($providerKey) : null;
             $providerSettingsSnapshot = $this->immutableProviderSettings($provider, $providerSettings);
             $capacityKey = $provider instanceof ChecksProvisioningStock
@@ -155,9 +159,10 @@ final class ProvisioningService implements PollsProvisionedInstances
             ];
             $optionsSnapshot = $this->sanitizeSnapshotForStorage($optionsSnapshot, $provider);
             $item->options_snapshot = $optionsSnapshot;
-            $item->provisioning_server_settings_snapshot = $serverSettingsSnapshot;
-            $item->provisioning_provider_settings_snapshot = $providerSettings;
+            $item->provisioning_server_settings_snapshot = null;
+            $item->provisioning_provider_settings_snapshot = null;
             $item->save();
+            $this->storeRuntimeProvisioningSettings($item, $serverSettingsSnapshot, $providerSettings);
         }
     }
 
@@ -182,9 +187,49 @@ final class ProvisioningService implements PollsProvisionedInstances
         ];
         $optionsSnapshot = $this->sanitizeSnapshotForStorage($optionsSnapshot);
         $item->options_snapshot = $optionsSnapshot;
-        $item->provisioning_server_settings_snapshot = $serverSettings;
-        $item->provisioning_provider_settings_snapshot = $providerSettings;
+        $item->provisioning_server_settings_snapshot = null;
+        $item->provisioning_provider_settings_snapshot = null;
         $item->save();
+        $this->storeRuntimeProvisioningSettings($item, $serverSettings, $providerSettings);
+    }
+
+    private function storeRuntimeProvisioningSettings(
+        object $item,
+        ?array $serverSettings,
+        array $providerSettings,
+    ): void {
+        $orderItemId = (int) ($item->id ?? 0);
+        if ($orderItemId < 1) {
+            return;
+        }
+
+        if ($serverSettings === null || $serverSettings === []) {
+            $this->runtimeSecrets->forget($orderItemId, 'provisioning_server_settings');
+        } else {
+            $this->runtimeSecrets->put($orderItemId, 'provisioning_server_settings', $serverSettings);
+        }
+        if ($providerSettings === []) {
+            $this->runtimeSecrets->forget($orderItemId, 'provisioning_provider_settings');
+        } else {
+            $this->runtimeSecrets->put($orderItemId, 'provisioning_provider_settings', $providerSettings);
+        }
+    }
+
+    /** @return array{0: array<string, mixed>|null, 1: array<string, mixed>|null} */
+    private function runtimeProvisioningSettings(object $item): array
+    {
+        $orderItemId = (int) ($item->id ?? 0);
+        $serverSettings = $orderItemId > 0
+            ? $this->runtimeSecrets->get($orderItemId, 'provisioning_server_settings')
+            : null;
+        $providerSettings = $orderItemId > 0
+            ? $this->runtimeSecrets->get($orderItemId, 'provisioning_provider_settings')
+            : null;
+
+        return [
+            is_array($serverSettings) ? $serverSettings : null,
+            is_array($providerSettings) ? $providerSettings : null,
+        ];
     }
 
     /** @param array<string, mixed> $settings @return array<string, mixed> */
@@ -429,13 +474,14 @@ final class ProvisioningService implements PollsProvisionedInstances
             : (is_string($rawServerId) && ctype_digit(trim($rawServerId)) && (int) $rawServerId > 0
                 ? (int) $rawServerId
                 : null);
-        $serverSettings = is_array($item->provisioning_server_settings_snapshot)
+        [$runtimeServerSettings, $runtimeProviderSettings] = $this->runtimeProvisioningSettings($item);
+        $serverSettings = $runtimeServerSettings ?? (is_array($item->provisioning_server_settings_snapshot)
             ? $item->provisioning_server_settings_snapshot
-            : null;
+            : null);
         $serverUnavailable = $serverId !== null && ($serverSettings === null || $serverSettings === []);
-        $providerSettings = is_array($item->provisioning_provider_settings_snapshot)
+        $providerSettings = $runtimeProviderSettings ?? (is_array($item->provisioning_provider_settings_snapshot)
             ? $item->provisioning_provider_settings_snapshot
-            : $this->decryptProviderSettings($snapshot['provider_settings_encrypted'] ?? null);
+            : $this->decryptProviderSettings($snapshot['provider_settings_encrypted'] ?? null));
         $providerSettings = $providerSettings ?? [];
         $provider = $providerKey !== null ? $this->provisioners->get($providerKey) : null;
         $providerSettingsUnavailable = $providerKey !== null
@@ -463,12 +509,9 @@ final class ProvisioningService implements PollsProvisionedInstances
         foreach ($existing as $existingInstance) {
             $existingMeta = is_array($existingInstance->meta) ? $existingInstance->meta : [];
             $existingChanged = false;
-            if ($existingInstance->provider_settings_snapshot === null && $providerSettings !== []) {
-                $existingInstance->provider_settings_snapshot = $providerSettings;
-                $existingChanged = true;
-            }
-            if ($existingInstance->server_settings_snapshot === null && $serverSettings !== null) {
-                $existingInstance->server_settings_snapshot = $serverSettings;
+            if ($existingInstance->server_settings_snapshot !== null || $existingInstance->provider_settings_snapshot !== null) {
+                $existingInstance->server_settings_snapshot = null;
+                $existingInstance->provider_settings_snapshot = null;
                 $existingChanged = true;
             }
             foreach ([
@@ -488,6 +531,11 @@ final class ProvisioningService implements PollsProvisionedInstances
                 $existingInstance->meta = $existingMeta;
                 $existingInstance->save();
             }
+            if ($providerSettings === [] && ($serverSettings === null || $serverSettings === [])) {
+                $this->serviceRuntimeSecrets->forget($existingInstance->id);
+            } else {
+                $this->serviceRuntimeSecrets->put($existingInstance->id, $serverSettings, $providerSettings);
+            }
         }
         $providerUnavailable = $providerKey !== null && $provider === null;
         $manualReview = $snapshot === [] || $providerKey === null || $serverUnavailable || $providerUnavailable
@@ -501,26 +549,7 @@ final class ProvisioningService implements PollsProvisionedInstances
         $subscriptionId = is_numeric($subscriptionId) ? (int) $subscriptionId : null;
 
         foreach ($missingUnits as $unitIndex) {
-            if ($manualReview && $product !== null && $providerKey !== null && $capacityKey !== null) {
-                $this->reservations->release(
-                    orderId: $order->id,
-                    productId: $product->id,
-                    providerKey: $providerKey,
-                    capacityKey: $capacityKey,
-                    requirementsFingerprint: $this->reservations->requirementsFingerprint($capacityRequirements),
-                    orderItemId: $item->id,
-                );
-            } elseif ($manualReview && $product !== null) {
-                $this->reservations->releaseForOrderProduct(
-                    order: $order,
-                    product: $product,
-                    providerKey: $providerKey,
-                    orderItemId: $item->id,
-                    requirementsFingerprint: $this->reservations->requirementsFingerprint($capacityRequirements),
-                );
-            }
-
-            ServiceInstance::query()->create([
+            $instance = ServiceInstance::query()->create([
                 'number' => $this->generateNumber(),
                 'order_id' => $order->id,
                 'order_item_id' => $item->id,
@@ -533,8 +562,8 @@ final class ProvisioningService implements PollsProvisionedInstances
                 'status' => $manualReview ? ServiceInstanceStatus::ManualReview : ServiceInstanceStatus::Pending,
                 'provider_key' => $providerKey,
                 'provisioning_server_id' => $serverId,
-                'server_settings_snapshot' => $serverSettings,
-                'provider_settings_snapshot' => $providerSettings,
+                'server_settings_snapshot' => null,
+                'provider_settings_snapshot' => null,
                 'meta' => [
                     'label' => $item->label,
                     'unit_index' => $unitIndex,
@@ -549,6 +578,7 @@ final class ProvisioningService implements PollsProvisionedInstances
                 'failed_at' => $manualReview ? now() : null,
                 'failure_message' => $manualReview ? $failureMessage : null,
             ]);
+            $this->serviceRuntimeSecrets->put($instance->id, $serverSettings, $providerSettings);
         }
 
         return false;
@@ -570,7 +600,7 @@ final class ProvisioningService implements PollsProvisionedInstances
      * @param  list<array<string, mixed>>  $snapshot
      * @return array<string, mixed>
      */
-    private function applyOptionOverrides(?string $providerKey, array $settings, array $snapshot): array
+    private function applyOptionOverrides(?string $providerKey, array $settings, array $snapshot, int $orderItemId): array
     {
         if ($providerKey === null) {
             return $settings;
@@ -586,7 +616,7 @@ final class ProvisioningService implements PollsProvisionedInstances
         foreach ($snapshot as $option) {
             $key = isset($option['key']) ? (string) $option['key'] : '';
             try {
-                $value = $this->options->runtimeValue($option);
+                $value = $this->options->runtimeValue($option, $orderItemId);
             } catch (Throwable) {
                 throw ValidationException::withMessages([
                     'order' => __('provisioning::errors.provider_unavailable'),

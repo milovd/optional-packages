@@ -120,11 +120,18 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
         try {
             $session = $api->createCheckoutSession($payload, $request->idempotencyKey);
-        } catch (StripeProviderException) {
+        } catch (StripeProviderException $exception) {
             Log::warning('payment.initiate.failed', [
                 'gateway_id' => self::ID,
                 'order_id' => $request->order->id,
             ]);
+
+            if ($exception->unknownOutcome) {
+                return PaymentInitiationResult::unknown(
+                    metadata: ['reason' => 'provider_transport_unknown'],
+                    message: __('stripe::messages.errors.create_failed'),
+                );
+            }
 
             return PaymentInitiationResult::failed(__('stripe::messages.errors.create_failed'));
         }
@@ -187,7 +194,14 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
                     'payment_id' => (string) $request->payment->id,
                 ],
             ], $request->idempotencyKey);
-        } catch (StripeProviderException) {
+        } catch (StripeProviderException $exception) {
+            if ($exception->unknownOutcome) {
+                return PaymentInitiationResult::unknown(
+                    metadata: ['reason' => 'provider_transport_unknown'],
+                    message: __('stripe::messages.errors.create_failed'),
+                );
+            }
+
             return PaymentInitiationResult::failed(__('stripe::messages.errors.create_failed'));
         }
 
@@ -297,11 +311,26 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             $refund = $api->refundPaymentIntent($intentId, [
                 'amount' => $request->amount,
             ], $request->idempotencyKey);
-        } catch (StripeProviderException) {
+        } catch (StripeProviderException $exception) {
+            if ($exception->unknownOutcome) {
+                return RefundResult::unknown(
+                    ['reason' => 'provider_transport_unknown'],
+                    __('stripe::messages.errors.refund_failed'),
+                );
+            }
+
             return RefundResult::fail(__('stripe::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok((string) ($refund['id'] ?? ''));
+        $externalRefundId = $refund['id'] ?? null;
+        if (! is_string($externalRefundId) || trim($externalRefundId) === '') {
+            return RefundResult::unknown(
+                ['reason' => 'provider_response_invalid'],
+                __('stripe::messages.errors.refund_failed'),
+            );
+        }
+
+        return RefundResult::ok($externalRefundId);
     }
 
     public function syncStatus(Payment $payment): Payment
@@ -337,7 +366,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         return $payment->fresh() ?? $payment;
     }
 
-    public function cancel(Payment $payment): Payment
+    public function cancel(Payment $payment, ?PaymentAttempt $attempt = null): Payment
     {
         $api = $this->client();
         if ($api === null) {
@@ -346,7 +375,8 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             ]);
         }
 
-        $intentId = $this->paymentIntentId($payment);
+        $attempt ??= $this->latestExternalAttempt($payment);
+        $intentId = $attempt?->external_id ?? $this->paymentIntentId($payment);
         if ($intentId === null) {
             throw ValidationException::withMessages([
                 'payment' => __('stripe::messages.errors.cancel_unsupported'),
@@ -370,7 +400,6 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             ]);
         }
 
-        $attempt = $this->latestExternalAttempt($payment);
         if ($attempt !== null) {
             $this->applyStatus->handle($attempt, StripeStatusMapper::fromPaymentIntent($remote));
         }
