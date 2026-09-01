@@ -27,7 +27,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['order_id', 'product_id', 'provider_key', 'capacity_key'], 'provisioning_capacity_reservation_unique');
-            $table->index(['capacity_key', 'provider_key']);
+            $table->index(['capacity_key', 'provider_key'], 'capacity_reservations_capacity_provider_idx');
         });
     }
 
