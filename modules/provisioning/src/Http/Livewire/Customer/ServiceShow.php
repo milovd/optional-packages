@@ -25,7 +25,7 @@ final class ServiceShow extends Component
         /** @var Customer $customer */
         $customer = authenticated_customer();
         abort_unless($this->owns($instance, $customer), 404);
-        $this->instance = $instance->load(['product', 'order.invoice']);
+        $this->instance = $instance->load(['product', 'order.invoices']);
     }
 
     public function runAction(string $actionId, RunProvisionerAction $runner): void

@@ -28,6 +28,7 @@ use App\Agovena\Customer\AccountNavItem;
 use App\Agovena\Customer\AccountOverviewCard;
 use App\Agovena\Modules\Contracts\Module;
 use App\Agovena\Modules\ModuleContext;
+use App\Agovena\Provisioning\ProvisionerRegistry;
 use App\Events\OrderCancelled;
 use App\Events\OrderCreated;
 use App\Events\OrderPaid;
@@ -51,6 +52,13 @@ final class ProvisioningModule implements Module
             label: 'admin.products.capabilities.provisionable',
             description: 'admin.products.capabilities.provisionable_help',
             providedByModule: $this->id(),
+            availability: static function (array $config): bool {
+                $providerKey = $config['provider_key'] ?? null;
+
+                return ! is_string($providerKey)
+                    || $providerKey === ''
+                    || app(ProvisionerRegistry::class)->get($providerKey) !== null;
+            },
         ));
 
         $context->admin()->permission('provisioning.view', 'admin.permissions.provisioning.view');
