@@ -90,7 +90,7 @@ final class ShipmentService
         $shipment->external_ref = $result->externalId;
         $shipment->carrier_name = $this->carrierLabel($carrierId);
         $shipment->tracking_number = $result->trackingNumber;
-        $shipment->tracking_url = $result->trackingUrl;
+        $shipment->tracking_url = $this->safeTrackingUrl($result->trackingUrl);
         $shipment->label_path = $result->labelPath;
         $shipment->save();
 
@@ -112,7 +112,7 @@ final class ShipmentService
             $shipment->tracking_number = $remote['tracking_number'];
         }
         if (($remote['tracking_url']) !== null) {
-            $shipment->tracking_url = $remote['tracking_url'];
+            $shipment->tracking_url = $this->safeTrackingUrl($remote['tracking_url']);
         }
         $shipment->save();
 
@@ -150,7 +150,7 @@ final class ShipmentService
             $shipment->tracking_number = $trackingNumber;
         }
         if ($trackingUrl !== null) {
-            $shipment->tracking_url = $trackingUrl !== '' ? $trackingUrl : null;
+            $shipment->tracking_url = $this->safeTrackingUrl($trackingUrl);
         }
         $shipment->shipped_at ??= now();
 
@@ -185,6 +185,29 @@ final class ShipmentService
         return $this->transition($shipment, ShipmentStatus::Cancelled);
     }
 
+    private function safeTrackingUrl(?string $url): ?string
+    {
+        if ($url === null || trim($url) === '') {
+            return null;
+        }
+
+        $url = trim($url);
+        $parts = parse_url($url);
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = (string) ($parts['host'] ?? '');
+
+        if ($parts === false || $host === '' || ! in_array($scheme, ['http', 'https'], true)
+            || isset($parts['user'], $parts['pass'], $parts['fragment'])
+            || preg_match('/[\x00-\x1F\x7F]/', $url) === 1
+        ) {
+            throw ValidationException::withMessages([
+                'tracking_url' => __('validation.url'),
+            ]);
+        }
+
+        return $url;
+    }
+
     private function carrierLabel(string $carrierId): string
     {
         $carrier = app(ShippingCarrierRegistry::class)->get($carrierId);
@@ -204,7 +227,7 @@ final class ShipmentService
     ): Shipment {
         $shipment->carrier_name = $carrierName;
         $shipment->tracking_number = $trackingNumber;
-        $shipment->tracking_url = filled($trackingUrl) ? $trackingUrl : null;
+        $shipment->tracking_url = $this->safeTrackingUrl($trackingUrl);
         $shipment->save();
 
         return $shipment->fresh() ?? $shipment;

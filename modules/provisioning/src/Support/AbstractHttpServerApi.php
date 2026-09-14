@@ -169,7 +169,10 @@ abstract class AbstractHttpServerApi implements ServerApi
         $pending = Http::timeout($timeout)
             ->withHeaders($this->headers())
             ->acceptJson()
-            ->withOptions(['verify' => $verifyTls]);
+            ->withOptions([
+                'verify' => $verifyTls,
+                'curl' => [CURLOPT_RESOLVE => [$this->resolveHost($baseUrl)]],
+            ]);
 
         try {
             $response = match ($method) {
@@ -188,6 +191,19 @@ abstract class AbstractHttpServerApi implements ServerApi
         }
 
         return $this->decode($response);
+    }
+
+    private function resolveHost(string $baseUrl): string
+    {
+        $parts = parse_url($baseUrl);
+        $host = (string) ($parts['host'] ?? '');
+        $port = (int) ($parts['port'] ?? (($parts['scheme'] ?? '') === 'http' ? 80 : 443));
+        $address = $this->urlValidator->resolvePublicIp($baseUrl);
+        $resolved = filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? '['.$address.']'
+            : $address;
+
+        return $host.':'.$port.':'.$resolved;
     }
 
     /** @return array<string, mixed> */
