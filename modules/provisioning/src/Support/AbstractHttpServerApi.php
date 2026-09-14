@@ -16,9 +16,18 @@ abstract class AbstractHttpServerApi implements ServerApi
     /** @param array<string, mixed> $connection */
     public function __construct(
         protected readonly ExtensionSettingsRepository $settings,
-        protected readonly OutboundHttpUrlValidator $urlValidator,
+        OutboundHttpUrlValidator|array $urlValidatorOrConnection = [],
         protected array $connection = [],
-    ) {}
+    ) {
+        if ($urlValidatorOrConnection instanceof OutboundHttpUrlValidator) {
+            $this->urlValidator = $urlValidatorOrConnection;
+        } else {
+            $this->urlValidator = app(OutboundHttpUrlValidator::class);
+            $this->connection = $urlValidatorOrConnection;
+        }
+    }
+
+    protected readonly OutboundHttpUrlValidator $urlValidator;
 
     /** @param array<string, mixed> $settings */
     public function withConnection(array $settings): static
