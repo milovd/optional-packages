@@ -166,13 +166,15 @@ abstract class AbstractHttpServerApi implements ServerApi
         } catch (\Illuminate\Validation\ValidationException) {
             throw new ServerProviderException('errors.invalid_mapping');
         }
+        $options = ['verify' => $verifyTls];
+        if (! in_array(config('app.env'), ['local', 'testing'], true)) {
+            $options['curl'] = [CURLOPT_RESOLVE => [$this->resolveHost($baseUrl)]];
+        }
+
         $pending = Http::timeout($timeout)
             ->withHeaders($this->headers())
             ->acceptJson()
-            ->withOptions([
-                'verify' => $verifyTls,
-                'curl' => [CURLOPT_RESOLVE => [$this->resolveHost($baseUrl)]],
-            ]);
+            ->withOptions($options);
 
         try {
             $response = match ($method) {
