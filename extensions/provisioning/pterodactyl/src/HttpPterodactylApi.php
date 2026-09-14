@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Extensions\Pterodactyl;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
+use App\Agovena\Security\OutboundHttpUrlValidator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -13,14 +14,28 @@ use Throwable;
 final class HttpPterodactylApi implements PterodactylApi
 {
     /** @param array<string, mixed> $connection */
+    private readonly ExtensionSettingsRepository $settings;
+
+    private readonly OutboundHttpUrlValidator $urlValidator;
+
+    private readonly ?array $connection;
+
+    /** @param array<string, mixed>|OutboundHttpUrlValidator $urlValidatorOrConnection */
     public function __construct(
-        private readonly ExtensionSettingsRepository $settings,
-        private readonly ?array $connection = null,
-    ) {}
+        ExtensionSettingsRepository $settings,
+        OutboundHttpUrlValidator|array $urlValidatorOrConnection = [],
+        ?array $connection = null,
+    ) {
+        $this->settings = $settings;
+        $this->urlValidator = is_array($urlValidatorOrConnection)
+            ? app(OutboundHttpUrlValidator::class)
+            : $urlValidatorOrConnection;
+        $this->connection = is_array($urlValidatorOrConnection) ? $urlValidatorOrConnection : $connection;
+    }
 
     public function withConnection(array $settings): PterodactylApi
     {
-        return new self($this->settings, $settings !== [] ? $settings : null);
+        return new self($this->settings, $this->urlValidator, $settings !== [] ? $settings : null);
     }
 
     public function connectionTest(): array
@@ -326,10 +341,16 @@ final class HttpPterodactylApi implements PterodactylApi
         ?array $body = null,
         string $accept = 'application/vnd.pterodactyl.v1+json',
     ): array {
-        $url = PterodactylPanelUrl::normalize($this->panelUrl()).$path;
+        $baseUrl = $this->urlValidator->validate(PterodactylPanelUrl::normalize($this->panelUrl()));
+        $url = rtrim($baseUrl, '/').$path;
         $timeout = max(1, (int) $this->setting('timeout', 15));
         $verify = filter_var($this->setting('verify_tls', true), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
         if ($verify === null) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_mapping');
+        }
+        try {
+            $this->urlValidator->assertTlsVerification($verify);
+        } catch (\Illuminate\Validation\ValidationException) {
             throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_mapping');
         }
 

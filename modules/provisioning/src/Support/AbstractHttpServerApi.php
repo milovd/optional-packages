@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Modules\Provisioning\Support;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
+use App\Agovena\Security\OutboundHttpUrlValidator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -15,6 +16,7 @@ abstract class AbstractHttpServerApi implements ServerApi
     /** @param array<string, mixed> $connection */
     public function __construct(
         protected readonly ExtensionSettingsRepository $settings,
+        protected readonly OutboundHttpUrlValidator $urlValidator,
         protected array $connection = [],
     ) {}
 
@@ -139,7 +141,8 @@ abstract class AbstractHttpServerApi implements ServerApi
      */
     protected function request(string $method, string $path, array $query = [], ?array $body = null): array
     {
-        $url = rtrim(trim((string) ($this->connection['api_url'] ?? '')), '/').$path;
+        $baseUrl = $this->urlValidator->validate((string) ($this->connection['api_url'] ?? ''));
+        $url = rtrim($baseUrl, '/').$path;
         if ($url === $path) {
             throw new ServerProviderException('errors.not_configured');
         }
@@ -147,6 +150,11 @@ abstract class AbstractHttpServerApi implements ServerApi
         $timeout = max(1, (int) ($this->connection['timeout'] ?? 20));
         $verifyTls = filter_var($this->connection['verify_tls'] ?? true, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
         if ($verifyTls === null) {
+            throw new ServerProviderException('errors.invalid_mapping');
+        }
+        try {
+            $this->urlValidator->assertTlsVerification($verifyTls);
+        } catch (\Illuminate\Validation\ValidationException) {
             throw new ServerProviderException('errors.invalid_mapping');
         }
         $pending = Http::timeout($timeout)

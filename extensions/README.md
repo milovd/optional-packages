@@ -70,13 +70,9 @@ Extensions must not bypass server-authoritative prices, webhook authority, or Ad
 
 ## Reference
 
-`extensions/payments/mollie` is the first production Payment Extension: hosted checkout, webhooks, refunds, and status sync behind the generic `PaymentGateway` contracts.
-`extensions/payments/stripe` is the second production Payment Extension: Stripe Checkout, signed webhooks, refunds, and off-session charges behind the same contracts.
-`extensions/payments/paypal` is the third production Payment Extension: PayPal Checkout behind the same contracts.
-`extensions/provisioning/cpanel`, `convoy`, `directadmin`, `enhance`, `plesk`, `virtfusion`, and `virtualizor` provide first-party server lifecycle adapters behind the shared provisioning support seam. Their manifests, settings, registry wiring, error handling, and fake HTTP contracts are tested. Live provider sandbox verification remains a separate deployment gate.
-`extensions/provisioning/pterodactyl` is the first production Provisioning Extension: panel lifecycle behind the generic `Provisioner` contracts.
-`extensions/provisioning/proxmox` is the second production Provisioning Extension: Proxmox VE lifecycle behind the same contracts.
-`extensions/shipping/postnl` is the first production Shipping Extension: barcodes, labels, and tracking behind the generic `ShippingCarrier` contracts.
+The first-party payment, provisioning, and shipping extensions are contract-tested adapters behind the generic Core seams. Their manifests currently set `production_ready: false`; hosted checkout, webhooks, refunds, lifecycle, labels, tracking, fake HTTP contracts, and error handling are not a substitute for provider sandbox acceptance.
+
+`extensions/provisioning/cpanel`, `convoy`, `directadmin`, `enhance`, `plesk`, `virtfusion`, and `virtualizor` are explicitly experimental and unavailable for production use until provider-specific acceptance evidence exists.
 
 ## Implementing a Payment Extension
 
