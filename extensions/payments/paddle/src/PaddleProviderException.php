@@ -17,4 +17,9 @@ final class PaddleProviderException extends RuntimeException
     {
         return new self($errorKey);
     }
+
+    public static function unknown(string $errorKey): self
+    {
+        return new self($errorKey);
+    }
 }

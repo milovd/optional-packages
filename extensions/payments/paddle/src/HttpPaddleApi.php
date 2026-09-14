@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Extensions\Paddle;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\ConnectionException;
 use Throwable;
 
 final class HttpPaddleApi implements PaddleApi
@@ -55,6 +56,8 @@ final class HttpPaddleApi implements PaddleApi
                 : $request->post($this->baseUrl.$path, $payload);
             $response->throw();
             $data = $response->json('data');
+        } catch (ConnectionException) {
+            throw PaddleProviderException::unknown('paddle::messages.errors.unknown_outcome');
         } catch (Throwable) {
             throw PaddleProviderException::failed('paddle::messages.errors.request_failed');
         }

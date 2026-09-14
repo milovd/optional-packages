@@ -93,11 +93,15 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
                     'payment_id' => (string) $request->payment->id,
                 ],
             ], $request->idempotencyKey);
-        } catch (PaddleProviderException) {
+        } catch (PaddleProviderException $exception) {
             Log::warning('payment.initiate.failed', [
                 'gateway_id' => self::ID,
                 'order_id' => $request->order->id,
             ]);
+
+            if ($exception->errorKey === 'paddle::messages.errors.unknown_outcome') {
+                return PaymentInitiationResult::unknown(message: __($exception->errorKey));
+            }
 
             return PaymentInitiationResult::failed(__('paddle::messages.errors.create_failed'));
         }

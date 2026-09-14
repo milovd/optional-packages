@@ -18,6 +18,7 @@ return [
         'items_missing' => 'Deze order bevat geen betaalbare items.',
         'create_failed' => 'Paddle-checkout kon niet worden aangemaakt.',
         'request_failed' => 'Paddle-request mislukt.',
+        'unknown_outcome' => 'De Paddle-betalingsstatus kon niet worden bevestigd. Reconciliatie is vereist.',
         'invalid_response' => 'Paddle gaf een ongeldige response terug.',
         'webhook_invalid' => 'De Paddle-webhook is ongeldig.',
         'refund_failed' => 'De Paddle-refund kon niet worden aangemaakt.',

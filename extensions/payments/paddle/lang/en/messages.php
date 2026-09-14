@@ -18,6 +18,7 @@ return [
         'items_missing' => 'This order has no payable items.',
         'create_failed' => 'Paddle checkout could not be created.',
         'request_failed' => 'Paddle request failed.',
+        'unknown_outcome' => 'Paddle payment status could not be confirmed. Reconciliation is required.',
         'invalid_response' => 'Paddle returned an invalid response.',
         'webhook_invalid' => 'The Paddle webhook is invalid.',
         'refund_failed' => 'Paddle refund could not be created.',
