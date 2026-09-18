@@ -6,6 +6,7 @@ namespace Agovena\Modules\Inventory;
 
 use Agovena\Modules\Inventory\Models\InventoryReservation;
 use Agovena\Modules\Inventory\Models\InventoryStock;
+use App\Events\ProductStockChanged;
 use App\Models\Order;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
@@ -38,10 +39,15 @@ final class InventoryService
     public function setQuantity(Product $product, int $quantity, bool $trackStock = true, bool $allowOversell = false): InventoryStock
     {
         $stock = $this->ensureStockRow($product);
+        $previousQuantity = $stock->quantity;
         $stock->quantity = max(0, $quantity);
         $stock->track_stock = $trackStock;
         $stock->allow_oversell = $allowOversell;
         $stock->save();
+
+        if ($previousQuantity !== $stock->quantity) {
+            ProductStockChanged::dispatch($product, $previousQuantity, $stock->quantity);
+        }
 
         return $stock;
     }
@@ -114,8 +120,10 @@ final class InventoryService
             foreach ($reservations as $reservation) {
                 $stock = InventoryStock::query()->where('product_id', $reservation->product_id)->lockForUpdate()->first();
                 if ($stock !== null && $stock->track_stock) {
+                    $previousQuantity = $stock->quantity;
                     $stock->quantity += $reservation->quantity;
                     $stock->save();
+                    ProductStockChanged::dispatch($stock->product, $previousQuantity, $stock->quantity);
                 }
 
                 $reservation->forceFill([
@@ -166,8 +174,10 @@ final class InventoryService
                 return;
             }
 
+            $previousQuantity = $stock->quantity;
             $stock->quantity += $quantity;
             $stock->save();
+            ProductStockChanged::dispatch($stock->product, $previousQuantity, $stock->quantity);
         });
     }
 }
