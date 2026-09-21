@@ -9,11 +9,9 @@ Agovena Core stays generic. Install only the capabilities your shop needs.
 ```text
 optional-packages/
 ├── modules/
-│ ├── inventory/
-│ ├── shipping/
 │ ├── digital/
 │ ├── digital-delivery/
-│ ├── subscriptions/
+│ ├── domains/
 │ ├── provisioning/
 │ └── events/
 └── extensions/

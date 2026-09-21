@@ -17,17 +17,15 @@ Store presets and product quick-start choices are helpers. They enable Modules /
 
 | Stable id | Display name | Typical merchant intents |
 |-----------|--------------|--------------------------|
-| `inventory` | Inventory | Physical products (stock) |
-| `shipping` | Shipping & Fulfillment | Physical delivery, shipments, returns |
 | `digital` | Downloads | Downloadable files / entitlements |
 | `digital-delivery` | Digital Delivery | Keys, codes, licenses, credentials |
-| `subscriptions` | Subscriptions | Recurring billing / memberships |
+| `domains` | Domains | Domain registration and management |
 | `provisioning` | Provisioning | Hosted / provisioned services (provider via Extension) |
 | `events` | Events & Ticketing | Ticketed events / check-in |
 
 **Downloads (`digital`) ≠ Digital Delivery (`digital-delivery`).** Files and secrets are separate capabilities on purpose.
 
-True technical dependencies are declared in each Module’s `module.json`. Presets may *recommend* combinations (e.g. Inventory + Shipping) without creating hard dependencies.
+Store presets may recommend combinations of Core capabilities and optional Modules without creating hard dependencies.
 
 ## Distribution
 
