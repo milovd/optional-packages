@@ -26,7 +26,7 @@ final class DigitalModule implements Module
 {
     public function id(): string
     {
-        return 'digital';
+        return 'downloads';
     }
 
     public function register(ModuleContext $context): void

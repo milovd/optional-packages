@@ -17,13 +17,13 @@ Store presets and product quick-start choices are helpers. They enable Modules /
 
 | Stable id | Display name | Typical merchant intents |
 |-----------|--------------|--------------------------|
-| `digital` | Downloads | Downloadable files / entitlements |
+| `downloads` | Downloads | Downloadable files / entitlements |
 | `digital-delivery` | Digital Delivery | Keys, codes, licenses, credentials |
 | `domains` | Domains | Domain registration and management |
 | `provisioning` | Provisioning | Hosted / provisioned services (provider via Extension) |
 | `events` | Events & Ticketing | Ticketed events / check-in |
 
-**Downloads (`digital`) ≠ Digital Delivery (`digital-delivery`).** Files and secrets are separate capabilities on purpose.
+**Downloads (`downloads`) ≠ Digital Delivery (`digital-delivery`).** Files and secrets are separate capabilities on purpose.
 
 Store presets may recommend combinations of Core capabilities and optional Modules without creating hard dependencies.
 
