@@ -20,7 +20,7 @@ use Agovena\Modules\Provisioning\Listeners\SnapshotProvisioningConfigurationWhen
 use Agovena\Modules\Provisioning\Listeners\SnapshotProvisioningConfigurationWhenOrderPlacing;
 use Agovena\Modules\Provisioning\Listeners\SuspendServicesWhenSubscriptionEnded;
 use Agovena\Modules\Provisioning\Models\ServiceInstance;
-use Agovena\Modules\Subscriptions\Events\SubscriptionEnded;
+use App\Agovena\Recurring\Events\SubscriptionEnded;
 use App\Agovena\Admin\CustomerDetailSection;
 use App\Agovena\Admin\NavigationItem;
 use App\Agovena\Catalog\Capabilities\ProductCapabilityDefinition;

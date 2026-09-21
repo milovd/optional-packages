@@ -7,7 +7,7 @@ namespace Agovena\Modules\Provisioning\Listeners;
 use Agovena\Modules\Provisioning\Enums\ServiceInstanceStatus;
 use Agovena\Modules\Provisioning\Models\ServiceInstance;
 use Agovena\Modules\Provisioning\ProvisioningService;
-use Agovena\Modules\Subscriptions\Events\SubscriptionEnded;
+use App\Agovena\Recurring\Events\SubscriptionEnded;
 use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 
 /**

@@ -9,7 +9,7 @@
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Postnl\\PostnlServiceProvider",
     "dependencies": [],
-    "module_dependencies": ["shipping"],
+    "module_dependencies": [],
     "settings": [
         {
             "key": "api_key",
