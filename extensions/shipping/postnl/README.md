@@ -3,7 +3,7 @@
 First-party Agovena Shipping Extension. Implements `ShippingCarrier`,
 `QuotesShippingRates`, `CreatesCarrierShipments`, and `TracksShipments`.
 
-It is **not** a Module. The Shipping Module stays generic.
+It is **not** a Module. Core Physical Commerce stays provider-agnostic.
 
 ## Why PostNL
 
