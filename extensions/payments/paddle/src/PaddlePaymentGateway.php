@@ -280,6 +280,19 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
             return HealthResult::fail(__('paddle::messages.health.missing_webhook'));
         }
 
+        $api = $this->client();
+        if ($api === null) {
+            return HealthResult::fail(__('paddle::messages.health.missing_key'));
+        }
+
+        if ($api instanceof PaddleConnectionChecker) {
+            try {
+                $api->ping();
+            } catch (PaddleProviderException) {
+                return HealthResult::fail(__('paddle::messages.errors.request_failed'));
+            }
+        }
+
         return HealthResult::ok(__('paddle::messages.health.ok', [
             'mode' => $this->sandbox() ? 'sandbox' : 'live',
             'webhook' => route('webhooks.payments', ['gateway' => self::ID], true),

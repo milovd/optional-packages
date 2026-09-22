@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Agovena\Extensions\Paddle;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
 use Throwable;
 
-final class HttpPaddleApi implements PaddleApi
+final class HttpPaddleApi implements PaddleApi, PaddleConnectionChecker
 {
     private string $baseUrl;
 
@@ -27,6 +27,11 @@ final class HttpPaddleApi implements PaddleApi
     public function getTransaction(string $transactionId): array
     {
         return $this->request('get', '/transactions/'.rawurlencode($transactionId));
+    }
+
+    public function ping(): void
+    {
+        $this->request('get', '/products?per_page=1');
     }
 
     public function createAdjustment(string $transactionId, string $reason, string $type = 'full', ?string $idempotencyKey = null): array

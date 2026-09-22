@@ -8,8 +8,8 @@ use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
-use App\Agovena\Payments\Contracts\ResolvesWebhookAttempts;
 use App\Agovena\Payments\Contracts\PaymentGateway;
+use App\Agovena\Payments\Contracts\ResolvesWebhookAttempts;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
 use App\Agovena\Payments\Contracts\ValidatesWebhookPayload;
 use App\Agovena\Payments\HealthResult;
@@ -328,6 +328,19 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         }
         if ($this->webhookSecret() === null) {
             return HealthResult::fail(__('tebex::messages.health.missing_webhook'));
+        }
+
+        $api = $this->client();
+        if ($api === null) {
+            return HealthResult::fail(__('tebex::messages.health.missing_credentials'));
+        }
+
+        if ($api instanceof TebexConnectionChecker) {
+            try {
+                $api->ping();
+            } catch (TebexProviderException) {
+                return HealthResult::fail(__('tebex::messages.errors.request_failed'));
+            }
         }
 
         return HealthResult::ok(__('tebex::messages.health.ok', [

@@ -16,6 +16,7 @@
             "type": "string",
             "secret": true,
             "required": true,
+            "connection": true,
             "default": "",
             "help": "mollie::messages.settings.api_key_help"
         },

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Agovena\Extensions\Tebex;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
 use Throwable;
 
-final class HttpTebexApi implements TebexApi
+final class HttpTebexApi implements TebexApi, TebexConnectionChecker
 {
     private const BASE_URL = 'https://checkout.tebex.io/api';
 
@@ -39,6 +39,38 @@ final class HttpTebexApi implements TebexApi
     public function getPayment(string $transactionId): array
     {
         return $this->request('get', '/payments/'.rawurlencode($transactionId).'?type=txn_id');
+    }
+
+    public function ping(): void
+    {
+        try {
+            $response = Http::withBasicAuth($this->projectId, $this->secretKey)
+                ->acceptJson()
+                ->timeout(20)
+                ->get(self::BASE_URL.'/payments/tbx-0000000000000000000000000000000000000000?type=txn_id');
+        } catch (ConnectionException) {
+            throw TebexProviderException::unknown('tebex::messages.errors.request_failed');
+        } catch (Throwable) {
+            throw TebexProviderException::failed('tebex::messages.errors.request_failed');
+        }
+
+        // Tebex has no non-mutating project-info endpoint. A 404 for a
+        // well-formed, non-existent payment proves the credentials reached the API.
+        if ($response->status() === 404) {
+            return;
+        }
+
+        try {
+            $response->throw();
+        } catch (RequestException $exception) {
+            if ($exception->response?->serverError() ?? false) {
+                throw TebexProviderException::unknown('tebex::messages.errors.request_failed');
+            }
+
+            throw TebexProviderException::failed('tebex::messages.errors.request_failed');
+        } catch (Throwable) {
+            throw TebexProviderException::failed('tebex::messages.errors.request_failed');
+        }
     }
 
     public function refundPayment(string $transactionId, ?string $reason = null, ?string $idempotencyKey = null): array

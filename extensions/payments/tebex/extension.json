@@ -16,6 +16,7 @@
             "type": "string",
             "secret": false,
             "required": true,
+            "connection": true,
             "default": "",
             "help": "tebex::messages.settings.project_id_help"
         },
@@ -25,6 +26,7 @@
             "type": "string",
             "secret": true,
             "required": true,
+            "connection": true,
             "default": "",
             "help": "tebex::messages.settings.secret_key_help"
         },
@@ -34,6 +36,7 @@
             "type": "string",
             "secret": true,
             "required": true,
+            "connection": true,
             "default": "",
             "help": "tebex::messages.settings.webhook_secret_help"
         },

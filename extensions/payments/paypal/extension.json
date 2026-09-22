@@ -16,6 +16,7 @@
             "type": "string",
             "secret": false,
             "required": true,
+            "connection": true,
             "default": "",
             "help": "paypal::messages.settings.client_id_help"
         },
@@ -25,6 +26,7 @@
             "type": "string",
             "secret": true,
             "required": true,
+            "connection": true,
             "default": "",
             "help": "paypal::messages.settings.client_secret_help"
         },
@@ -34,6 +36,7 @@
             "type": "string",
             "secret": false,
             "required": true,
+            "connection": true,
             "default": "",
             "help": "paypal::messages.settings.webhook_id_help"
         },
