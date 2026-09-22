@@ -723,7 +723,9 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
         $parts = parse_url($icon);
         $host = strtolower((string) ($parts['host'] ?? ''));
-        if (($parts['scheme'] ?? '') !== 'https' || ! ($host === 'stripe.com' || str_ends_with($host, '.stripe.com'))) {
+        $isStripeHost = $host === 'stripe.com' || str_ends_with($host, '.stripe.com');
+        $isStripeCdnHost = $host === 'stripecdn.com' || str_ends_with($host, '.stripecdn.com');
+        if (($parts['scheme'] ?? '') !== 'https' || (! $isStripeHost && ! $isStripeCdnHost)) {
             return null;
         }
 
