@@ -8,9 +8,9 @@ return [
     ],
     'settings' => [
         'secret_key' => 'Secret key',
-        'secret_key_help' => 'Use a sk_test_ or sk_live_ key from the Stripe dashboard. Leave blank after saving to keep the stored key. Override with AGOVENA_EXT_STRIPE_SECRET_KEY. Do not collect card details on this server.',
+        'secret_key_help' => 'Use a sk_test_ or sk_live_ key from the Stripe dashboard. Leave blank after saving to keep the stored key. Store it only in protected Extension settings. Do not collect card details on this server.',
         'webhook_secret' => 'Webhook signing secret',
-        'webhook_secret_help' => 'whsec_ secret for Stripe-Signature verification. Webhook URL: /webhooks/payments/stripe. Override with AGOVENA_EXT_STRIPE_WEBHOOK_SECRET.',
+        'webhook_secret_help' => 'whsec_ secret for Stripe-Signature verification. Webhook URL: /webhooks/payments/stripe. Store it only in protected Extension settings.',
         'enabled_methods' => 'Enabled Checkout methods',
         'enabled_methods_help' => 'Stripe methods are discovered from the active Payment Method Configuration. Leave all selected to expose every method Stripe currently makes available.',
     ],

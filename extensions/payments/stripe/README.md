@@ -16,14 +16,7 @@ Stripe Checkout remains the hosted payment surface. Agovena servers never collec
 POST https://shop.example.com/webhooks/payments/stripe
 ```
 
-Optional environment overrides are available for secret stores:
-
-```dotenv
-AGOVENA_EXT_STRIPE_SECRET_KEY=sk_test_...
-AGOVENA_EXT_STRIPE_WEBHOOK_SECRET=whsec_...
-```
-
-Never commit real values or place them in screenshots, logs, tickets, or chat. Stored Extension secrets are encrypted and are not redisplayed.
+Never commit real values or place them in screenshots, logs, tickets, or chat. Enter sensitive provider credentials only through the protected Admin Extension settings. Generic environment overrides intentionally do not bypass encrypted sensitive settings.
 
 ## Webhooks
 

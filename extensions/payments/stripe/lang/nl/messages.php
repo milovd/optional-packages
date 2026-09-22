@@ -8,9 +8,9 @@ return [
     ],
     'settings' => [
         'secret_key' => 'Geheime sleutel',
-        'secret_key_help' => 'Gebruik een sk_test_ of sk_live_ sleutel uit het Stripe-dashboard. Laat leeg na opslaan om de opgeslagen sleutel te houden. Override: AGOVENA_EXT_STRIPE_SECRET_KEY. Verzamel geen kaartgegevens op deze server.',
+        'secret_key_help' => 'Gebruik een sk_test_ of sk_live_ sleutel uit het Stripe-dashboard. Laat leeg na opslaan om de opgeslagen sleutel te houden. Sla deze alleen op in de beschermde Extension settings. Verzamel geen kaartgegevens op deze server.',
         'webhook_secret' => 'Webhook-ondertekeningsgeheim',
-        'webhook_secret_help' => 'whsec_ geheim voor Stripe-Signature-verificatie. Webhook-URL: /webhooks/payments/stripe. Override: AGOVENA_EXT_STRIPE_WEBHOOK_SECRET.',
+        'webhook_secret_help' => 'whsec_ geheim voor Stripe-Signature-verificatie. Webhook-URL: /webhooks/payments/stripe. Sla dit alleen op in de beschermde Extension settings.',
         'enabled_methods' => 'Actieve Checkout-methoden',
         'enabled_methods_help' => 'Stripe-methoden worden ontdekt vanuit de actieve Payment Method Configuration. Laat alles geselecteerd om alle actuele methoden van Stripe te tonen.',
     ],
