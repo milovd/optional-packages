@@ -9,6 +9,7 @@ use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
 use App\Agovena\Payments\Contracts\CancelsPayments;
 use App\Agovena\Payments\Contracts\ChargesRecurringPayments;
+use App\Agovena\Payments\Contracts\ConfiguresCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersReusablePaymentAuthorization;
 use App\Agovena\Payments\Contracts\PaymentGateway;
@@ -29,9 +30,55 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
-final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPayments, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments
+final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPayments, ConfiguresCheckoutMethods, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments
 {
     public const ID = 'stripe';
+
+    /** @var list<string> */
+    private const CHECKOUT_METHOD_IDS = [
+        'acss_debit',
+        'affirm',
+        'afterpay_clearpay',
+        'alipay',
+        'au_becs_debit',
+        'bacs_debit',
+        'bancontact',
+        'blik',
+        'boleto',
+        'card',
+        'cashapp',
+        'crypto',
+        'eps',
+        'fpx',
+        'giropay',
+        'grabpay',
+        'ideal',
+        'klarna',
+        'konbini',
+        'link',
+        'multibanco',
+        'oxxo',
+        'p24',
+        'pay_by_bank',
+        'paypal',
+        'pix',
+        'promptpay',
+        'sepa_debit',
+        'sofort',
+        'swish',
+        'twint',
+        'us_bank_account',
+        'wechat_pay',
+        'zip',
+    ];
+
+    /** @var list<string> */
+    private const RECURRING_METHOD_IDS = [
+        'card',
+        'link',
+        'sepa_debit',
+        'us_bank_account',
+    ];
 
     /** @var array<string, mixed>|null */
     private ?array $verifiedEvent = null;
@@ -67,8 +114,77 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     public function checkoutMethods(): array
     {
-        // Stripe Checkout lists the configured payment methods.
-        return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
+        $definitions = $this->configurableCheckoutMethods();
+        if ($definitions === []) {
+            $definitions = [$this->fallbackMethodDefinition('card')];
+        }
+
+        $activeIds = $this->enabledMethodIds();
+        if ($activeIds === []) {
+            $activeIds = array_column($definitions, 'id');
+        }
+
+        $methods = [];
+        foreach ($definitions as $definition) {
+            $id = (string) ($definition['id'] ?? '');
+            if ($id === '' || ! in_array($id, $activeIds, true)) {
+                continue;
+            }
+
+            $methods[] = new CheckoutPaymentMethod(
+                gatewayId: self::ID,
+                id: self::ID.':'.$id,
+                label: (string) $definition['label'],
+                icon: $definition['icon'] ?? null,
+                metadata: ['provider_method' => $id],
+            );
+        }
+
+        return $methods;
+    }
+
+    /**
+     * @return list<array{id: string, label: string, icon: ?string}>
+     */
+    public function configurableCheckoutMethods(): array
+    {
+        $api = $this->client();
+        if ($api === null) {
+            return [];
+        }
+
+        try {
+            $configurations = $api->listPaymentMethodConfigurations();
+        } catch (StripeProviderException) {
+            return [];
+        }
+
+        $configuration = $this->defaultPaymentMethodConfiguration($configurations);
+        if ($configuration === null) {
+            return [];
+        }
+
+        $methods = [];
+        foreach (self::CHECKOUT_METHOD_IDS as $id) {
+            $definition = $configuration[$id] ?? null;
+            if (! is_array($definition) || ($definition['available'] ?? false) !== true) {
+                continue;
+            }
+
+            $displayPreference = $definition['display_preference'] ?? null;
+            if (is_array($displayPreference)
+                && (($displayPreference['value'] ?? $displayPreference['preference'] ?? null) === 'off')) {
+                continue;
+            }
+
+            $methods[] = [
+                'id' => $id,
+                'label' => 'stripe::messages.methods.'.$id,
+                'icon' => $this->providerIcon($definition['icon'] ?? null),
+            ];
+        }
+
+        return $methods;
     }
 
     public function initiate(PaymentInitiation $request): PaymentInitiationResult
@@ -112,11 +228,21 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             $payload['customer_creation'] = 'always';
         }
 
-        $restricted = $this->enabledMethodIds();
+        $providerMethod = $this->providerMethod($request->metadata);
+        if ($providerMethod !== null) {
+            if (! in_array($providerMethod, $this->activeMethodIds(), true)) {
+                return PaymentInitiationResult::failed(__('stripe::messages.errors.method_unavailable'));
+            }
+            if ($this->isAutomaticRenewal($request) && ! in_array($providerMethod, self::RECURRING_METHOD_IDS, true)) {
+                return PaymentInitiationResult::failed(__('stripe::messages.errors.recurring_method_unsupported'));
+            }
+            $payload['payment_method_types'] = [$providerMethod];
+        }
+
+        $restricted = $providerMethod === null ? $this->activeMethodIds() : [];
         if ($restricted !== []) {
             $payload['payment_method_types'] = $restricted;
         }
-        // Otherwise omit types so Stripe Checkout uses dashboard-configured methods.
 
         try {
             $session = $api->createCheckoutSession($payload, $request->idempotencyKey);
@@ -497,6 +623,96 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         }
 
         return $ids;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function activeMethodIds(): array
+    {
+        $available = array_column($this->configurableCheckoutMethods(), 'id');
+        if ($available === []) {
+            return ['card'];
+        }
+
+        $configured = $this->enabledMethodIds();
+        if ($configured === []) {
+            return $available;
+        }
+
+        return array_values(array_intersect($configured, $available));
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function providerMethod(array $metadata): ?string
+    {
+        $method = $metadata['checkout_method'] ?? null;
+        if (! is_string($method) || $method === '' || ! in_array($method, self::CHECKOUT_METHOD_IDS, true)) {
+            return null;
+        }
+
+        return $method;
+    }
+
+    private function isAutomaticRenewal(PaymentInitiation $request): bool
+    {
+        foreach ((array) $request->order->custom_properties_snapshot as $property) {
+            if (is_array($property) && ($property['key'] ?? null) === '_agovena_renewal_mode') {
+                return ($property['value'] ?? null) === 'automatic';
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $configurations
+     * @return array<string, mixed>|null
+     */
+    private function defaultPaymentMethodConfiguration(array $configurations): ?array
+    {
+        foreach ($configurations as $configuration) {
+            if (($configuration['active'] ?? false) === true && ($configuration['is_default'] ?? false) === true) {
+                return $configuration;
+            }
+        }
+
+        foreach ($configurations as $configuration) {
+            if (($configuration['active'] ?? false) === true) {
+                return $configuration;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{id: string, label: string, icon: ?string}
+     */
+    private function fallbackMethodDefinition(string $id): array
+    {
+        return [
+            'id' => $id,
+            'label' => 'stripe::messages.methods.'.$id,
+            'icon' => null,
+        ];
+    }
+
+    private function providerIcon(mixed $icon): ?string
+    {
+        if (! is_string($icon) || ! filter_var($icon, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $parts = parse_url($icon);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if (($parts['scheme'] ?? '') !== 'https' || ! ($host === 'stripe.com' || str_ends_with($host, '.stripe.com'))) {
+            return null;
+        }
+
+        return $icon;
     }
 
     /**

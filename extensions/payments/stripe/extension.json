@@ -2,7 +2,7 @@
     "id": "stripe",
     "name": "Stripe",
     "version": "1.0.0",
-    "description": "Payment Extension for Stripe Checkout, signed webhooks, refunds, and off-session charges.",
+    "description": "Payment Extension for Stripe Checkout, provider-discovered payment methods, signed webhooks, refunds, and off-session charges.",
     "author": "Agovena",
     "category": "payment_gateway",
     "production_ready": false,
@@ -31,7 +31,7 @@
         {
             "key": "enabled_methods",
             "label": "stripe::messages.settings.enabled_methods",
-            "type": "string",
+            "type": "payment_methods",
             "secret": false,
             "required": false,
             "default": "",

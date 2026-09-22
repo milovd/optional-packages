@@ -26,6 +26,18 @@ final class SdkStripeApi implements StripeApi
         return $this->request('post', '/v1/checkout/sessions', $payload, $idempotencyKey);
     }
 
+    public function listPaymentMethodConfigurations(): array
+    {
+        $response = $this->request('get', '/v1/payment_method_configurations', []);
+        $data = $response['data'] ?? [];
+
+        if (! is_array($data)) {
+            throw StripeProviderException::failed('stripe::messages.errors.methods_unavailable');
+        }
+
+        return array_values(array_filter($data, static fn (mixed $configuration): bool => is_array($configuration)));
+    }
+
     public function retrieveCheckoutSession(string $id): array
     {
         return $this->request('get', '/v1/checkout/sessions/'.rawurlencode($id), [

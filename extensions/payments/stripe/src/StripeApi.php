@@ -16,6 +16,11 @@ interface StripeApi
     public function createCheckoutSession(array $payload, ?string $idempotencyKey = null): array;
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    public function listPaymentMethodConfigurations(): array;
+
+    /**
      * @return array<string, mixed>
      */
     public function retrieveCheckoutSession(string $id): array;
