@@ -875,6 +875,35 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         }
         $customer = $object['customer'] ?? null;
         $stripeCustomerId = is_array($customer) ? ($customer['id'] ?? null) : $customer;
+
+        $paymentMethodId = $this->paymentMethodId($object);
+        $paymentIntent = $object['payment_intent'] ?? null;
+        if (($paymentMethodId === null || ! is_string($stripeCustomerId) || $stripeCustomerId === '')
+            && is_string($paymentIntent)
+            && str_starts_with($paymentIntent, 'pi_')) {
+            $api = $this->client();
+            if ($api !== null) {
+                try {
+                    $intent = $api->retrievePaymentIntent($paymentIntent);
+                    $object = [
+                        ...$object,
+                        'customer' => $object['customer'] ?? ($intent['customer'] ?? null),
+                        'payment_method' => $intent['payment_method'] ?? null,
+                        'metadata' => [
+                            ...(is_array($object['metadata'] ?? null) ? $object['metadata'] : []),
+                            ...(is_array($intent['metadata'] ?? null) ? $intent['metadata'] : []),
+                        ],
+                    ];
+                    $paymentMethodId = $this->paymentMethodId($object);
+                    $stripeCustomerId = is_array($object['customer'] ?? null)
+                        ? ($object['customer']['id'] ?? null)
+                        : ($object['customer'] ?? null);
+                } catch (StripeProviderException) {
+                    return;
+                }
+            }
+        }
+
         if (! is_string($stripeCustomerId) || $stripeCustomerId === '') {
             return;
         }
@@ -888,7 +917,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             $agovenaCustomerId,
             $email,
             $stripeCustomerId,
-            $this->paymentMethodId($object),
+            $paymentMethodId,
             'active',
         );
     }

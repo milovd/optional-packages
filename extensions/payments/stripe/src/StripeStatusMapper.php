@@ -38,7 +38,8 @@ final class StripeStatusMapper
             'payment_intent.succeeded' => self::map('succeeded', self::int($object['amount'] ?? 0), self::int($object['amount_refunded'] ?? 0)),
             'payment_intent.payment_failed' => PaymentStatus::Failed,
             'payment_intent.canceled' => PaymentStatus::Cancelled,
-            'checkout.session.expired', 'checkout.session.async_payment_failed' => PaymentStatus::Failed,
+            'checkout.session.expired' => PaymentStatus::Expired,
+            'checkout.session.async_payment_failed' => PaymentStatus::Failed,
             'charge.refunded' => self::fromCharge($object),
             default => PaymentStatus::Pending,
         };

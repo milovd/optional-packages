@@ -8,6 +8,7 @@ use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
+use App\Agovena\Payments\Contracts\ResolvesWebhookAttempts;
 use App\Agovena\Payments\Contracts\PaymentGateway;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
 use App\Agovena\Payments\Contracts\ValidatesWebhookPayload;
@@ -24,7 +25,7 @@ use App\Models\PaymentAttempt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway, SynchronizesPayments, ValidatesWebhookPayload
+final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway, ResolvesWebhookAttempts, SynchronizesPayments, ValidatesWebhookPayload
 {
     public const ID = 'tebex';
 
@@ -194,6 +195,21 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
                 'custom' => $subject['custom'] ?? ($subject['custom_data'] ?? null),
             ],
         );
+    }
+
+    public function resolveWebhookAttempt(WebhookPayload $payload): ?PaymentAttempt
+    {
+        $custom = is_array($payload->raw['custom'] ?? null) ? $payload->raw['custom'] : [];
+        $paymentId = $custom['payment_id'] ?? null;
+        if (! is_scalar($paymentId) || trim((string) $paymentId) === '') {
+            return null;
+        }
+
+        return PaymentAttempt::query()
+            ->where('gateway_id', self::ID)
+            ->where('payment_id', (string) $paymentId)
+            ->latest('id')
+            ->first();
     }
 
     public function validateWebhookPayload(PaymentAttempt $attempt, WebhookPayload $payload): bool

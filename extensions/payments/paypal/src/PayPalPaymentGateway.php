@@ -7,7 +7,6 @@ namespace Agovena\Extensions\PayPal;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
-use App\Agovena\Payments\Contracts\CancelsPayments;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\PaymentGateway;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
@@ -24,9 +23,8 @@ use App\Models\PaymentAttempt;
 use App\Support\MoneyFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 
-final class PayPalPaymentGateway implements CancelsPayments, OffersCheckoutMethods, PaymentGateway, SynchronizesPayments
+final class PayPalPaymentGateway implements OffersCheckoutMethods, PaymentGateway, SynchronizesPayments
 {
     public const ID = 'paypal';
 
@@ -58,7 +56,7 @@ final class PayPalPaymentGateway implements CancelsPayments, OffersCheckoutMetho
             webhooks: true,
             redirect: true,
             statusSync: true,
-            cancelPending: true,
+            cancelPending: false,
         );
     }
 
@@ -200,6 +198,9 @@ final class PayPalPaymentGateway implements CancelsPayments, OffersCheckoutMetho
 
         $status = PayPalStatusMapper::fromWebhookEvent($event) ?? PaymentStatus::Pending;
         $resource = is_array($event['resource'] ?? null) ? $event['resource'] : [];
+        if (($event['event_type'] ?? null) === 'CHECKOUT.ORDER.APPROVED') {
+            $status = $this->captureApprovedOrder($resource, $event);
+        }
         $externalPaymentId = $this->externalIdFromResource($resource, $event);
 
         return new WebhookPayload(
@@ -284,11 +285,32 @@ final class PayPalPaymentGateway implements CancelsPayments, OffersCheckoutMetho
         return $payment->fresh() ?? $payment;
     }
 
-    public function cancel(Payment $payment, ?PaymentAttempt $attempt = null): Payment
+    /**
+     * Capture an approved order before acknowledging the webhook. PayPal's
+     * CAPTURE intent does not settle the order merely because the buyer
+     * approved it.
+     *
+     * @param  array<string, mixed>  $resource
+     * @param  array<string, mixed>  $event
+     */
+    private function captureApprovedOrder(array $resource, array $event): PaymentStatus
     {
-        throw ValidationException::withMessages([
-            'payment' => __('paypal::messages.errors.cancel_unsupported'),
-        ]);
+        $orderId = $this->externalIdFromResource($resource, $event);
+        $api = $this->client();
+        if ($orderId === '' || $api === null) {
+            throw PayPalProviderException::failed('paypal::messages.errors.provider_failed');
+        }
+
+        try {
+            $order = $api->getOrder($orderId);
+            if (strtoupper((string) ($order['status'] ?? '')) !== 'COMPLETED') {
+                $order = $api->captureOrder($orderId, (string) ($event['id'] ?? null));
+            }
+        } catch (PayPalProviderException $exception) {
+            throw $exception;
+        }
+
+        return PayPalStatusMapper::fromOrder($order);
     }
 
     public function health(): HealthResult
