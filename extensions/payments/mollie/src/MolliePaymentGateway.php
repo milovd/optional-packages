@@ -16,6 +16,7 @@ use App\Agovena\Payments\Contracts\PaymentGateway;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
 use App\Agovena\Payments\HealthResult;
 use App\Agovena\Payments\PaymentGatewayCapabilities;
+use App\Agovena\Payments\PaymentMethodDiscoveryCache;
 use App\Agovena\Payments\PaymentInitiation;
 use App\Agovena\Payments\PaymentInitiationResult;
 use App\Agovena\Payments\RefundRequest;
@@ -690,13 +691,22 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
      */
     private function providerMethodDefinitions(): array
     {
+        $cache = app(PaymentMethodDiscoveryCache::class);
+        $fingerprint = $cache->fingerprintValues(self::ID, [
+            'api_key' => $this->settings->get(self::ID, 'api_key'),
+        ]);
+        $cached = $cache->get(self::ID, $fingerprint, requireVerifiedConnection: false);
+        if ($cached !== null) {
+            return $cached;
+        }
+
         $api = $this->client();
         if ($api === null) {
             return [];
         }
 
         try {
-            return array_values(array_map(
+            $methods = array_values(array_map(
                 fn (array $method): array => [
                     'id' => (string) ($method['id'] ?? ''),
                     'label' => $this->methodLabel(
@@ -710,6 +720,11 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                     static fn (array $method): bool => filled($method['id'] ?? null),
                 ),
             ));
+            if ($methods !== []) {
+                $cache->put(self::ID, $fingerprint, $methods, connectionVerified: false);
+            }
+
+            return $methods;
         } catch (MollieProviderException) {
             return [];
         }

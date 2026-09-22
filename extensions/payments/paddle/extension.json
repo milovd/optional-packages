@@ -45,6 +45,7 @@
             "type": "boolean",
             "secret": false,
             "required": true,
+            "connection_context": true,
             "default": true,
             "help": "paddle::messages.settings.sandbox_help"
         }
