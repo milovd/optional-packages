@@ -24,7 +24,7 @@ return [
         'bancontact' => 'Bancontact',
         'blik' => 'BLIK',
         'boleto' => 'Boleto',
-        'card' => 'Card',
+        'card' => 'Credit card',
         'cashapp' => 'Cash App Pay',
         'crypto' => 'Crypto',
         'eps' => 'EPS',

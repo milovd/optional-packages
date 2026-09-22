@@ -13,6 +13,7 @@ use App\Agovena\Payments\Contracts\ConfiguresCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersReusablePaymentAuthorization;
 use App\Agovena\Payments\Contracts\PaymentGateway;
+use App\Agovena\Payments\Contracts\RefreshesCheckoutMethods;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
 use App\Agovena\Payments\HealthResult;
 use App\Agovena\Payments\PaymentGatewayCapabilities;
@@ -31,7 +32,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
-final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPayments, ConfiguresCheckoutMethods, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments
+final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPayments, ConfiguresCheckoutMethods, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, RefreshesCheckoutMethods, SynchronizesPayments
 {
     public const ID = 'stripe';
 
@@ -72,6 +73,36 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         'wechat_pay',
         'zip',
     ];
+
+    /** @var array<string, list<string>> */
+    private const CUSTOMER_COUNTRIES = [
+        'acss_debit' => ['CA'],
+        'affirm' => ['CA', 'US'],
+        'afterpay_clearpay' => ['AU', 'CA', 'GB', 'NZ', 'US'],
+        'au_becs_debit' => ['AU'],
+        'bacs_debit' => ['GB'],
+        'bancontact' => ['BE'],
+        'blik' => ['PL'],
+        'boleto' => ['BR'],
+        'cashapp' => ['US'],
+        'eps' => ['AT'],
+        'fpx' => ['MY'],
+        'giropay' => ['DE'],
+        'grabpay' => ['MY', 'SG'],
+        'ideal' => ['NL'],
+        'konbini' => ['JP'],
+        'multibanco' => ['PT'],
+        'oxxo' => ['MX'],
+        'p24' => ['PL'],
+        'pix' => ['BR'],
+        'promptpay' => ['TH'],
+        'swish' => ['SE'],
+        'twint' => ['CH'],
+        'us_bank_account' => ['US'],
+        'zip' => ['AU', 'CA', 'GB', 'NZ', 'US'],
+    ];
+
+    private const DISCOVERY_SCHEMA_VERSION = 'credit-card-country-filter-v1';
 
     /** @var list<string> */
     private const RECURRING_METHOD_IDS = [
@@ -137,7 +168,10 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
                 id: self::ID.':'.$id,
                 label: (string) $definition['label'],
                 icon: $definition['icon'] ?? null,
-                metadata: ['provider_method' => $id],
+                metadata: [
+                    'provider_method' => $id,
+                    'customer_countries' => self::CUSTOMER_COUNTRIES[$id] ?? [],
+                ],
             );
         }
 
@@ -149,12 +183,26 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
      */
     public function configurableCheckoutMethods(): array
     {
+        return $this->loadConfigurableCheckoutMethods();
+    }
+
+    public function refreshConfigurableCheckoutMethods(): array
+    {
+        return $this->loadConfigurableCheckoutMethods(true);
+    }
+
+    /**
+     * @return list<array{id: string, label: string, icon: ?string}>
+     */
+    private function loadConfigurableCheckoutMethods(bool $force = false): array
+    {
         $cache = app(PaymentMethodDiscoveryCache::class);
         $fingerprint = $cache->fingerprintValues(self::ID, [
+            'discovery_schema' => self::DISCOVERY_SCHEMA_VERSION,
             'secret_key' => $this->settings->get(self::ID, 'secret_key'),
             'webhook_secret' => $this->settings->get(self::ID, 'webhook_secret'),
         ]);
-        $cached = $cache->get(self::ID, $fingerprint, requireVerifiedConnection: false);
+        $cached = $force ? null : $cache->get(self::ID, $fingerprint, requireVerifiedConnection: false);
         if ($cached !== null) {
             return $cached;
         }
@@ -734,7 +782,13 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     private function localMethodIcon(string $id): ?string
     {
-        return 'ag:payment-method/'.$id;
+        $asset = $id === 'card' ? 'creditcard' : $id;
+        $path = public_path('images/payment-methods/'.$asset.'.svg');
+        if (! is_file($path)) {
+            return null;
+        }
+
+        return 'ag:payment-method/'.$asset;
     }
 
     /**

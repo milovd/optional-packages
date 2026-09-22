@@ -13,6 +13,7 @@ use App\Agovena\Payments\Contracts\ConfiguresCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersReusablePaymentAuthorization;
 use App\Agovena\Payments\Contracts\PaymentGateway;
+use App\Agovena\Payments\Contracts\RefreshesCheckoutMethods;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
 use App\Agovena\Payments\HealthResult;
 use App\Agovena\Payments\PaymentGatewayCapabilities;
@@ -33,7 +34,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
-final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPayments, ConfiguresCheckoutMethods, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments
+final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPayments, ConfiguresCheckoutMethods, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, RefreshesCheckoutMethods, SynchronizesPayments
 {
     public const ID = 'mollie';
 
@@ -81,6 +82,18 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                 'icon' => $method['icon'] ?? null,
             ],
             $this->providerMethodDefinitions(),
+        );
+    }
+
+    public function refreshConfigurableCheckoutMethods(): array
+    {
+        return array_map(
+            fn (array $method): array => [
+                'id' => $method['id'],
+                'label' => $method['label'],
+                'icon' => $method['icon'] ?? null,
+            ],
+            $this->providerMethodDefinitions(true),
         );
     }
 
@@ -689,13 +702,13 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     /**
      * @return list<array{id: string, label: string, icon: ?string}>
      */
-    private function providerMethodDefinitions(): array
+    private function providerMethodDefinitions(bool $force = false): array
     {
         $cache = app(PaymentMethodDiscoveryCache::class);
         $fingerprint = $cache->fingerprintValues(self::ID, [
             'api_key' => $this->settings->get(self::ID, 'api_key'),
         ]);
-        $cached = $cache->get(self::ID, $fingerprint, requireVerifiedConnection: false);
+        $cached = $force ? null : $cache->get(self::ID, $fingerprint, requireVerifiedConnection: false);
         if ($cached !== null) {
             return $cached;
         }
