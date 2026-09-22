@@ -25,19 +25,10 @@
             "label": "paddle::messages.settings.webhook_secret",
             "type": "string",
             "secret": true,
-            "required": true,
+            "required": false,
             "connection": true,
             "default": "",
             "help": "paddle::messages.settings.webhook_secret_help"
-        },
-        {
-            "key": "price_map",
-            "label": "paddle::messages.settings.price_map",
-            "type": "textarea",
-            "secret": false,
-            "required": true,
-            "default": "{}",
-            "help": "paddle::messages.settings.price_map_help"
         },
         {
             "key": "sandbox",

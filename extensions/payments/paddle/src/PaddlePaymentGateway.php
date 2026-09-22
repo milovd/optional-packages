@@ -71,22 +71,34 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
             return PaymentInitiationResult::failed(__('paddle::messages.errors.not_configured'));
         }
 
-        $priceMap = $this->priceMap();
-        $items = [];
-        foreach ($request->order->items as $item) {
-            $priceId = $priceMap[(string) $item->product_id] ?? null;
-            if (! is_string($priceId) || $priceId === '') {
-                return PaymentInitiationResult::failed(__('paddle::messages.errors.price_mapping_missing'));
-            }
-            $items[] = ['price_id' => $priceId, 'quantity' => max(1, (int) $item->quantity)];
-        }
-        if ($items === []) {
+        if ($request->order->items->isEmpty()) {
             return PaymentInitiationResult::failed(__('paddle::messages.errors.items_missing'));
         }
+
+        $orderName = (string) $request->order->number;
+        $orderDescription = 'Agovena order '.$orderName;
+        $currency = strtoupper((string) $request->payment->currency);
+        $items = [[
+            'quantity' => 1,
+            'price' => [
+                'name' => $orderName,
+                'description' => $orderDescription,
+                'unit_price' => [
+                    'amount' => (string) $request->payment->amount,
+                    'currency_code' => $currency,
+                ],
+                'product' => [
+                    'name' => $orderName,
+                    'description' => $orderDescription,
+                    'tax_category' => 'standard',
+                ],
+            ],
+        ]];
 
         try {
             $transaction = $api->createTransaction([
                 'items' => $items,
+                'currency_code' => $currency,
                 'collection_mode' => 'automatic',
                 'custom_data' => [
                     'order_id' => (string) $request->order->id,
@@ -198,27 +210,17 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
             return false;
         }
 
-        $expected = [];
-        $priceMap = $this->priceMap();
-        foreach ($payment->order->items as $item) {
-            $priceId = $priceMap[(string) $item->product_id] ?? null;
-            if (! is_string($priceId) || $priceId === '') {
-                return false;
-            }
-            $expected[] = $priceId.':'.max(1, (int) $item->quantity);
+        $lineItems = array_values(array_filter(
+            (array) ($payload->raw['line_items'] ?? []),
+            static fn (mixed $item): bool => is_array($item),
+        ));
+        if (count($lineItems) !== 1 || (int) ($lineItems[0]['quantity'] ?? 0) !== 1) {
+            return false;
         }
 
-        $actual = [];
-        foreach ((array) ($payload->raw['line_items'] ?? []) as $item) {
-            if (! is_array($item) || ! isset($item['price_id'], $item['quantity'])) {
-                return false;
-            }
-            $actual[] = (string) $item['price_id'].':'.max(1, (int) $item['quantity']);
-        }
-        sort($expected);
-        sort($actual);
+        $lineTotal = $lineItems[0]['totals']['total'] ?? $lineItems[0]['unit_totals']['total'] ?? null;
 
-        return $expected === $actual;
+        return (string) $lineTotal === (string) $payment->amount;
     }
 
     public function refund(RefundRequest $request): RefundResult
@@ -309,26 +311,6 @@ final class PaddlePaymentGateway implements OffersCheckoutMethods, PaymentGatewa
         return $key !== null ? new HttpPaddleApi($key, $this->sandbox()) : null;
     }
 
-    /** @return array<string, string> */
-    private function priceMap(): array
-    {
-        $value = $this->settings->get(self::ID, 'price_map', []);
-        if (is_string($value)) {
-            $value = json_decode($value, true);
-        }
-        if (! is_array($value)) {
-            return [];
-        }
-
-        $map = [];
-        foreach ($value as $productId => $priceId) {
-            if (is_scalar($priceId) && trim((string) $priceId) !== '') {
-                $map[(string) $productId] = trim((string) $priceId);
-            }
-        }
-
-        return $map;
-    }
 
     private function apiKey(): ?string
     {
