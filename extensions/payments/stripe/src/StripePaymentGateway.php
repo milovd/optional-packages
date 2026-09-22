@@ -180,7 +180,7 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             $methods[] = [
                 'id' => $id,
                 'label' => 'stripe::messages.methods.'.$id,
-                'icon' => $this->providerIcon($definition['icon'] ?? null),
+                'icon' => $this->providerIcon($definition['icon'] ?? null) ?? $this->localMethodIcon($id),
             ];
         }
 
@@ -713,6 +713,18 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         }
 
         return $icon;
+    }
+
+    private function localMethodIcon(string $id): ?string
+    {
+        return match ($id) {
+            'card' => 'ag:payment-card',
+            'bancontact' => 'ag:payment-bancontact',
+            'ideal' => 'ag:payment-ideal',
+            'klarna' => 'ag:payment-klarna',
+            'paypal' => 'ag:payment-paypal',
+            default => 'ag:payment-bank',
+        };
     }
 
     /**
