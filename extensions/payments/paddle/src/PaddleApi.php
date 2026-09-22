@@ -13,5 +13,23 @@ interface PaddleApi
     public function getTransaction(string $transactionId): array;
 
     /** @return array<string, mixed> */
-    public function createAdjustment(string $transactionId, string $reason, string $type = 'full', ?string $idempotencyKey = null): array;
+    public function getSubscription(string $subscriptionId): array;
+
+    /** @return array<string, mixed> */
+    public function cancelSubscription(string $subscriptionId, bool $atPeriodEnd = true): array;
+
+    /** @return array<string, mixed> */
+    public function clearScheduledSubscriptionChange(string $subscriptionId): array;
+
+    /**
+     * @param  list<array{item_id: string, type: string, amount?: string}>|null  $items
+     * @return array<string, mixed>
+     */
+    public function createAdjustment(
+        string $transactionId,
+        string $reason,
+        string $type = 'full',
+        ?array $items = null,
+        ?string $idempotencyKey = null,
+    ): array;
 }

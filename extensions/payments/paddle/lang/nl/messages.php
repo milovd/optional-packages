@@ -19,7 +19,7 @@ return [
         'invalid_response' => 'Paddle gaf een ongeldige response terug.',
         'webhook_invalid' => 'De Paddle-webhook is ongeldig.',
         'refund_failed' => 'De Paddle-refund kon niet worden aangemaakt.',
-        'partial_refund_unsupported' => 'Deze Agovena-adapter ondersteunt momenteel alleen volledige Paddle-refunds.',
+        'recurring_items_unsupported' => 'Automatische Paddle-subscriptions vereisen één subscribable orderregel.',
     ],
     'health' => [
         'missing_key' => 'Paddle API-sleutel ontbreekt.',

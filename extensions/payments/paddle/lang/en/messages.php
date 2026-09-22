@@ -19,7 +19,7 @@ return [
         'invalid_response' => 'Paddle returned an invalid response.',
         'webhook_invalid' => 'The Paddle webhook is invalid.',
         'refund_failed' => 'Paddle refund could not be created.',
-        'partial_refund_unsupported' => 'Paddle currently supports full refunds in this Agovena adapter only.',
+        'recurring_items_unsupported' => 'Paddle automatic subscriptions require one subscribable order item.',
     ],
     'health' => [
         'missing_key' => 'Paddle API key is missing.',

@@ -29,19 +29,53 @@ final class HttpPaddleApi implements PaddleApi, PaddleConnectionChecker
         return $this->request('get', '/transactions/'.rawurlencode($transactionId));
     }
 
+    public function getSubscription(string $subscriptionId): array
+    {
+        return $this->request('get', '/subscriptions/'.rawurlencode($subscriptionId));
+    }
+
+    public function cancelSubscription(string $subscriptionId, bool $atPeriodEnd = true): array
+    {
+        return $this->request('post', '/subscriptions/'.rawurlencode($subscriptionId).'/cancel', [
+            'effective_from' => $atPeriodEnd ? 'next_billing_period' : 'immediately',
+        ]);
+    }
+
+    public function clearScheduledSubscriptionChange(string $subscriptionId): array
+    {
+        return $this->request('patch', '/subscriptions/'.rawurlencode($subscriptionId), [
+            'scheduled_change' => null,
+        ]);
+    }
+
     public function ping(): void
     {
         $this->request('get', '/products?per_page=1');
     }
 
-    public function createAdjustment(string $transactionId, string $reason, string $type = 'full', ?string $idempotencyKey = null): array
+    /**
+     * @param  list<array{item_id: string, type: string, amount?: string}>|null  $items
+     */
+    public function createAdjustment(
+        string $transactionId,
+        string $reason,
+        string $type = 'full',
+        ?array $items = null,
+        ?string $idempotencyKey = null,
+    ): array
     {
-        return $this->request('post', '/adjustments', [
+        $payload = [
             'action' => 'refund',
             'transaction_id' => $transactionId,
             'reason' => $reason !== '' ? $reason : 'Agovena refund',
             'type' => $type,
-        ], $idempotencyKey);
+        ];
+        if ($type === 'partial' && $items !== null) {
+            $payload['items'] = $items;
+            $payload['tax_mode'] = 'internal';
+        }
+
+        return $this->request('post', '/adjustments', $payload, $idempotencyKey);
     }
 
     /** @param array<string, mixed> $payload */
@@ -56,9 +90,11 @@ final class HttpPaddleApi implements PaddleApi, PaddleConnectionChecker
                 $request = $request->withHeaders(['Idempotency-Key' => $idempotencyKey]);
             }
 
-            $response = $method === 'get'
-                ? $request->get($this->baseUrl.$path)
-                : $request->post($this->baseUrl.$path, $payload);
+            $response = match ($method) {
+                'get' => $request->get($this->baseUrl.$path),
+                'patch' => $request->patch($this->baseUrl.$path, $payload),
+                default => $request->post($this->baseUrl.$path, $payload),
+            };
             $response->throw();
             $data = $response->json('data');
         } catch (ConnectionException) {
