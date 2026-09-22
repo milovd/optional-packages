@@ -1,50 +1,85 @@
 # Stripe Payment Extension
 
-First-party Agovena Payment Extension. Implements `PaymentGateway` plus optional
-`OffersCheckoutMethods`, `ConfiguresCheckoutMethods`, `SynchronizesPayments`,
-`CancelsPayments`, `ChargesRecurringPayments`, and
-`OffersReusablePaymentAuthorization`.
+Production-ready first-party Agovena Payment Extension for Stripe Checkout. The current integration supports test mode and live mode, provider-discovered Checkout methods, country-aware filtering, signed webhooks, idempotent event processing, status synchronization, refunds, and supported off-session charges.
 
-Stripe Checkout remains the hosted payment surface. Agovena servers never
-collect raw card details. Stripe Payment Method Configurations are discovered
-from the provider API. The Admin can enable or disable each currently
-available Checkout method, for example card, iDEAL or Bancontact. Selecting
-`stripe:bancontact` starts a Checkout Session restricted to Bancontact.
+Stripe Checkout remains the hosted payment surface. Agovena servers never collect raw card details.
 
 ## Merchant setup
 
-1. Admin -> Extensions -> enable **Stripe**
-2. Save a `sk_test_` or `sk_live_` secret key (encrypted; never redisplayed)
-3. Save the webhook signing secret (`whsec_...`)
-4. Point Stripe webhooks at `/webhooks/payments/stripe`
-5. Optional: `AGOVENA_EXT_STRIPE_SECRET_KEY` and `AGOVENA_EXT_STRIPE_WEBHOOK_SECRET`
+1. Admin -> Extensions -> enable **Stripe**.
+2. Use `sk_test_...` and a matching `whsec_...` secret while testing.
+3. Configure `secret_key` and `webhook_secret` in protected Extension settings.
+4. Use `enabled_methods` to restrict the provider-discovered Checkout methods, or leave it empty to use all currently available methods.
+5. Use this webhook route:
 
-The method list comes from Stripe's active Payment Method Configuration. An
-empty method selection exposes every method Stripe reports as available. Stripe
-hosts the official payment surface and its provider-side method presentation.
+```text
+POST https://shop.example.com/webhooks/payments/stripe
+```
+
+Optional environment overrides are available for secret stores:
+
+```dotenv
+AGOVENA_EXT_STRIPE_SECRET_KEY=sk_test_...
+AGOVENA_EXT_STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+Never commit real values or place them in screenshots, logs, tickets, or chat. Stored Extension secrets are encrypted and are not redisplayed.
 
 ## Webhooks
 
-Stripe signs events with `Stripe-Signature`. This Extension verifies the
-payload with the official Stripe PHP SDK before mapping into the generic
-`HandlePaymentWebhook` pipeline. Return URLs are UX only.
+Stripe signs events with `Stripe-Signature`. The Extension verifies the raw request body with the official Stripe PHP SDK before mapping it into Core's `HandlePaymentWebhook` pipeline. Return URLs are UX only and do not mark an order paid.
 
-## Recurring
+Configure the events used by the integration:
 
-Reusable payment-method ids stay in the Extension table
-`stripe_payment_authorizations`. Subscriptions charge through the generic
-`ChargeRecurringPayment` action and never import Stripe types. Automatic
-renewal is limited to methods that Stripe supports for reusable off-session
-charges. Bancontact and iDEAL can be used for one-time Checkout payments but
-are not silently treated as recurring authorizations.
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `checkout.session.async_payment_failed`
+- `checkout.session.expired`
+- `payment_intent.succeeded`
+- `payment_intent.payment_failed`
+- `payment_intent.canceled`
+- `charge.refunded`
 
-## Refunds
+Events are stored idempotently by gateway and Stripe event ID. Duplicate delivery does not create a second payment, fulfillment action, or refund. Events without a known Agovena payment attempt are deferred for reconciliation.
 
-Full and partial refunds use Stripe's Refunds API and remain linked to the
-normal Agovena refund administration. Unknown provider outcomes stay pending
-for reconciliation.
+## Stripe CLI local forwarding
 
-## Tests
+Install and authenticate the official Stripe CLI:
 
-CI uses a fake Stripe HTTP client. Live Stripe credentials are not required
-and must not be committed.
+```bash
+npm install -g @stripe/cli
+stripe login
+```
+
+Forward test events to a local Agovena server:
+
+```bash
+stripe listen --forward-to http://127.0.0.1:8000/webhooks/payments/stripe
+```
+
+The CLI prints a temporary `whsec_...` signing secret. Use it only for this local forwarding session. Do not use it as the Dashboard endpoint secret, and never share it. Stop forwarding with `Ctrl+C`.
+
+Use triggers for signature and mapper smoke tests:
+
+```bash
+stripe trigger payment_intent.succeeded
+stripe trigger payment_intent.payment_failed
+```
+
+CLI triggers do not automatically belong to an existing Agovena order. A real order test must start a test Checkout from Agovena and verify the resulting event and payment status.
+
+## Live mode
+
+For production use, configure a separate `sk_live_...` key and live `whsec_...` endpoint secret. Register the HTTPS route in Stripe Workbench or Webhooks. Stripe CLI forwarding is for local test events and does not replace the live Dashboard endpoint.
+
+Rotate API keys and webhook secrets in a controlled maintenance window. Agovena supports one active webhook secret per configuration, so coordinate the Stripe rotation and the Agovena setting update, then verify a delivery.
+
+## Recurring and refunds
+
+Reusable payment method IDs stay in the Extension table `stripe_payment_authorizations`. Automatic renewal is limited to methods that Stripe supports for reusable off-session charges. Bancontact and iDEAL are one-time Checkout methods in this integration.
+
+Full and partial refunds use Stripe's Refunds API and remain linked to normal Agovena refund administration. Unknown provider outcomes stay pending for reconciliation.
+
+## Verification
+
+CI uses a fake Stripe HTTP client. Live Stripe credentials are not required and must not be committed. Provider-live verification remains an operator step using the documented test and live checklist.
