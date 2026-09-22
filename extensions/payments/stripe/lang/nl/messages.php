@@ -54,7 +54,8 @@ return [
         'ok' => 'Verbonden (:mode). Webhook: :webhook',
         'missing_key' => 'Geheime sleutel is niet geconfigureerd.',
         'invalid_key' => 'Geheime sleutel moet beginnen met sk_test_ of sk_live_.',
-        'missing_webhook' => 'Webhook-ondertekeningsgeheim is niet geconfigureerd.',
+        'missing_webhook' => 'Webhook-ondertekeningsgeheim is niet ingesteld.',
+        'invalid_webhook' => 'Webhook-ondertekeningsgeheim moet beginnen met whsec_.',
         'unreachable' => 'Stripe is niet bereikbaar. Controleer de geheime sleutel en het netwerk.',
     ],
     'errors' => [

@@ -605,8 +605,12 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         if (! preg_match('/^sk_(test|live)_[A-Za-z0-9]+$/', $key)) {
             return HealthResult::fail(__('stripe::messages.health.invalid_key'));
         }
-        if ($this->webhookSecret() === null) {
+        $webhookSecret = $this->settings->get(self::ID, 'webhook_secret');
+        if (! is_string($webhookSecret) || trim($webhookSecret) === '') {
             return HealthResult::fail(__('stripe::messages.health.missing_webhook'));
+        }
+        if ($this->webhookSecret() === null) {
+            return HealthResult::fail(__('stripe::messages.health.invalid_webhook'));
         }
 
         $api = $this->client();
@@ -659,7 +663,12 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             return null;
         }
 
-        return trim($secret);
+        $secret = trim($secret);
+        if (! str_starts_with($secret, 'whsec_') || strlen($secret) <= strlen('whsec_')) {
+            return null;
+        }
+
+        return $secret;
     }
 
     private function webhookUrl(): string

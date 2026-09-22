@@ -55,6 +55,7 @@ return [
         'missing_key' => 'Secret key is not configured.',
         'invalid_key' => 'Secret key must start with sk_test_ or sk_live_.',
         'missing_webhook' => 'Webhook signing secret is not configured.',
+        'invalid_webhook' => 'Webhook signing secret must start with whsec_.',
         'unreachable' => 'Could not reach Stripe. Check the secret key and network.',
     ],
     'errors' => [
