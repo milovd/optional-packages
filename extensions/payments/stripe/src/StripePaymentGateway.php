@@ -438,8 +438,9 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
     {
         $payload = $request->getContent();
         $signature = (string) $request->header('Stripe-Signature', '');
+        $key = $this->secretKey();
         $secret = $this->webhookSecret();
-        if ($payload === '' || $signature === '' || $secret === null) {
+        if ($payload === '' || $signature === '' || $key === null || $secret === null) {
             return false;
         }
 
@@ -454,7 +455,22 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
             return false;
         }
 
-        return isset($this->verifiedEvent['id'], $this->verifiedEvent['type']);
+        if (! isset($this->verifiedEvent['id'], $this->verifiedEvent['type'])
+            || ! is_bool($this->verifiedEvent['livemode'] ?? null)
+        ) {
+            $this->verifiedEvent = null;
+
+            return false;
+        }
+
+        $expectedLiveMode = str_starts_with($key, 'sk_live_');
+        if ($this->verifiedEvent['livemode'] !== $expectedLiveMode) {
+            $this->verifiedEvent = null;
+
+            return false;
+        }
+
+        return true;
     }
 
     public function parseWebhook(Request $request): WebhookPayload
@@ -515,6 +531,20 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         if (! is_string($externalRefundId) || trim($externalRefundId) === '') {
             return RefundResult::unknown(
                 ['reason' => 'provider_response_invalid'],
+                __('stripe::messages.errors.refund_failed'),
+            );
+        }
+
+        $refundStatus = $refund['status'] ?? null;
+        if ($refundStatus === 'failed' || $refundStatus === 'canceled') {
+            return RefundResult::fail(__('stripe::messages.errors.refund_failed'));
+        }
+        if ($refundStatus !== 'succeeded') {
+            return RefundResult::unknown(
+                [
+                    'reason' => 'provider_refund_outcome_unknown',
+                    'provider_status' => is_string($refundStatus) ? $refundStatus : 'missing',
+                ],
                 __('stripe::messages.errors.refund_failed'),
             );
         }
@@ -994,6 +1024,9 @@ final class StripePaymentGateway implements CancelsPayments, ChargesRecurringPay
         }
 
         $metadata = is_array($object['metadata'] ?? null) ? $object['metadata'] : [];
+        if (! isset($metadata['payment_id']) && ! isset($metadata['order_id'])) {
+            return;
+        }
         $agovenaCustomerId = isset($metadata['customer_id']) && is_numeric($metadata['customer_id'])
             ? (int) $metadata['customer_id']
             : null;

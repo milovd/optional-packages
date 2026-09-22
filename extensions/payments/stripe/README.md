@@ -33,6 +33,8 @@ Configure the events used by the integration:
 - `payment_intent.canceled`
 - `charge.refunded`
 
+Only a Stripe refund response with status `succeeded` is marked completed locally. `pending` responses stay in reconciliation/manual review and `failed` or `canceled` responses fail safely.
+
 Events are stored idempotently by gateway and Stripe event ID. Duplicate delivery does not create a second payment, fulfillment action, or refund. Events without a known Agovena payment attempt are deferred for reconciliation.
 
 ## Stripe CLI local forwarding
