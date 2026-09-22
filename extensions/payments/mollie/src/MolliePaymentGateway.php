@@ -100,13 +100,17 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             'description' => $request->order->number,
             'redirectUrl' => $request->returnUrl,
             'cancelUrl' => $request->cancelUrl,
-            'webhookUrl' => $this->webhookUrl(),
             'metadata' => [
                 'order_id' => $request->order->id,
                 'payment_id' => $request->payment->id,
             ],
             'locale' => $this->locale(),
         ];
+
+        $webhookUrl = $this->webhookUrl();
+        if ($webhookUrl !== null) {
+            $payload['webhookUrl'] = $webhookUrl;
+        }
 
         $selectedMethod = $request->metadata['checkout_method'] ?? null;
         if (is_string($selectedMethod) && $selectedMethod !== '') {
@@ -638,9 +642,16 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
         return trim($key);
     }
 
-    private function webhookUrl(): string
+    private function webhookUrl(): ?string
     {
-        return route('webhooks.payments', ['gateway' => self::ID], true);
+        $url = route('webhooks.payments', ['gateway' => self::ID], true);
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if (app()->environment('local', 'testing') && in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            return null;
+        }
+
+        return $url;
     }
 
     private function locale(): ?string
