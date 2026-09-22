@@ -38,6 +38,27 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
 {
     public const ID = 'mollie';
 
+    /** @var array<string, list<string>> */
+    private const CUSTOMER_COUNTRIES = [
+        'bancomatpay' => ['IT'],
+        'bancontact' => ['BE'],
+        'belfius' => ['BE'],
+        'blik' => ['PL'],
+        'bizum' => ['ES'],
+        'eps' => ['AT'],
+        'ideal' => ['NL'],
+        'kbc' => ['BE'],
+        'mbway' => ['PT'],
+        'mobilepay' => ['DK', 'FI'],
+        'multibanco' => ['PT'],
+        'p24' => ['PL'],
+        'satispay' => ['IT'],
+        'sofort' => ['AT', 'BE', 'DE', 'ES', 'IT', 'NL'],
+        'swish' => ['SE'],
+        'twint' => ['CH'],
+        'vipps' => ['NO'],
+    ];
+
     /** @var array<string, mixed>|null */
     private ?array $verifiedPayment = null;
 
@@ -111,6 +132,10 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                 self::ID.':'.$method['id'],
                 $method['label'],
                 $method['icon'] ?? null,
+                [
+                    'provider_method' => $method['id'],
+                    'customer_countries' => self::CUSTOMER_COUNTRIES[$method['id']] ?? [],
+                ],
             ),
             $methods,
         );
