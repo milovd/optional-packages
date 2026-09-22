@@ -28,9 +28,7 @@ final class MollieExtension implements Extension
         $context->setting(new ExtensionSettingDefinition(
             key: 'enabled_methods',
             label: 'mollie::messages.settings.enabled_methods',
-            type: 'string',
-            secret: false,
-            help: 'mollie::messages.settings.enabled_methods_help',
+            type: 'payment_methods',
         ));
 
         $context->paymentGateway(app(MolliePaymentGateway::class));

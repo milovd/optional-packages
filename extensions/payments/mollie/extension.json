@@ -22,7 +22,7 @@
         {
             "key": "enabled_methods",
             "label": "mollie::messages.settings.enabled_methods",
-            "type": "string",
+            "type": "payment_methods",
             "secret": false,
             "required": false,
             "default": "",

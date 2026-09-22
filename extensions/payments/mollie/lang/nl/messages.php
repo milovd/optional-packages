@@ -10,7 +10,9 @@ return [
         'api_key' => 'API-sleutel',
         'api_key_help' => 'Gebruik een test_ of live_ sleutel uit het Mollie-dashboard. Laat leeg na opslaan om de opgeslagen sleutel te behouden. Override: AGOVENA_EXT_MOLLIE_API_KEY. Webhook: /webhooks/payments/mollie',
         'enabled_methods' => 'Ingeschakelde betaalmethoden',
-        'enabled_methods_help' => 'Optionele kommagescheiden Mollie-methode-ids (ideal, bancontact, creditcard, paypal). Leeg laten om alle methoden op het Mollie-profiel aan te bieden.',
+        'enabled_methods_help' => 'Selecteer welke betaalmethoden die in je Mollie-profiel actief zijn in de checkout getoond worden.',
+        'methods_unavailable' => 'Verbind eerst met Mollie om de actieve betaalmethoden op te halen.',
+        'methods_required' => 'Selecteer minstens één Mollie-betaalmethode.',
     ],
     'methods' => [
         'ideal' => 'iDEAL',

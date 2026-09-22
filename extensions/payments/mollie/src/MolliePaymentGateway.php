@@ -9,6 +9,7 @@ use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
 use App\Agovena\Payments\Contracts\CancelsPayments;
 use App\Agovena\Payments\Contracts\ChargesRecurringPayments;
+use App\Agovena\Payments\Contracts\ConfiguresCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\OffersReusablePaymentAuthorization;
 use App\Agovena\Payments\Contracts\PaymentGateway;
@@ -31,7 +32,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
-final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPayments, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments
+final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPayments, ConfiguresCheckoutMethods, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments
 {
     public const ID = 'mollie';
 
@@ -67,6 +68,21 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
         );
     }
 
+    /**
+     * @return list<array{id: string, label: string, icon: ?string}>
+     */
+    public function configurableCheckoutMethods(): array
+    {
+        return array_map(
+            fn (array $method): array => [
+                'id' => $method['id'],
+                'label' => $method['label'],
+                'icon' => $this->methodIcon($method['id']),
+            ],
+            $this->providerMethodDefinitions(),
+        );
+    }
+
     public function checkoutMethods(): array
     {
         $methods = $this->availableMethodDefinitions();
@@ -80,7 +96,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                 self::ID,
                 self::ID.':'.$method['id'],
                 $method['label'],
-                $method['id'] === 'creditcard' ? '/images/payments/credit-card.svg' : null,
+                $method['id'] === 'creditcard' ? '/images/payments/credit-card.svg' : $this->methodIcon($method['id']),
             ),
             $methods,
         );
@@ -669,16 +685,8 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     /**
      * @return list<array{id: string, label: string}>
      */
-    private function availableMethodDefinitions(): array
+    private function providerMethodDefinitions(): array
     {
-        $configured = $this->enabledMethodIds();
-        if ($configured !== []) {
-            return array_map(fn (string $id): array => [
-                'id' => $id,
-                'label' => $this->methodLabel($id),
-            ], $configured);
-        }
-
         $api = $this->client();
         if ($api === null) {
             return [];
@@ -701,6 +709,35 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
         } catch (MollieProviderException) {
             return [];
         }
+    }
+
+    private function methodIcon(string $id): ?string
+    {
+        return match ($id) {
+            'creditcard' => '/images/payments/credit-card.svg',
+            'ideal' => '/images/payments/ideal.svg',
+            'bancontact' => '/images/payments/bancontact.svg',
+            'paypal' => '/images/payments/paypal.svg',
+            default => '/images/payments/mollie.svg',
+        };
+    }
+
+    /**
+     * @return list<array{id: string, label: string}>
+     */
+    private function availableMethodDefinitions(): array
+    {
+        $configured = $this->enabledMethodIds();
+        if ($configured !== []) {
+            $labels = collect($this->providerMethodDefinitions())->keyBy('id');
+
+            return array_map(fn (string $id): array => [
+                'id' => $id,
+                'label' => $labels->get($id)['label'] ?? $this->methodLabel($id),
+            ], $configured);
+        }
+
+        return $this->providerMethodDefinitions();
     }
 
     private function methodLabel(string $id, string $fallback = ''): string

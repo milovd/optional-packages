@@ -10,7 +10,9 @@ return [
         'api_key' => 'API key',
         'api_key_help' => 'Use a test_ or live_ key from your Mollie dashboard. Leave blank after saving to keep the stored key. Override with AGOVENA_EXT_MOLLIE_API_KEY. Webhook URL: /webhooks/payments/mollie',
         'enabled_methods' => 'Enabled payment methods',
-        'enabled_methods_help' => 'Optional comma-separated Mollie method ids (ideal, bancontact, creditcard, paypal). Leave empty to offer all methods enabled on the Mollie profile.',
+        'enabled_methods_help' => 'Select which payment methods enabled in your Mollie profile should appear at checkout.',
+        'methods_unavailable' => 'Connect Mollie first to retrieve the enabled payment methods.',
+        'methods_required' => 'Select at least one Mollie payment method.',
     ],
     'methods' => [
         'ideal' => 'iDEAL',
