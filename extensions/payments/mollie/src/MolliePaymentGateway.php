@@ -661,14 +661,17 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     private function webhookUrl(): ?string
     {
-        $url = route('webhooks.payments', ['gateway' => self::ID], true);
-        $host = parse_url($url, PHP_URL_HOST);
+        $applicationUrl = rtrim((string) config('app.url'), '/');
+        $scheme = strtolower((string) parse_url($applicationUrl, PHP_URL_SCHEME));
+        $host = parse_url($applicationUrl, PHP_URL_HOST);
 
-        if (app()->environment('local', 'testing') && in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+        if ($scheme !== 'https' || ! is_string($host) || $host === '') {
             return null;
         }
 
-        return $url;
+        $path = route('webhooks.payments', ['gateway' => self::ID], false);
+
+        return $applicationUrl.$path;
     }
 
     private function locale(): ?string
