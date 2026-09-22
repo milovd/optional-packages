@@ -32,7 +32,7 @@ interface MollieApi
     public function refundPayment(string $paymentId, array $payload, ?string $idempotencyKey = null): array;
 
     /**
-     * @return list<array{id: string, description: string}>
+     * @return list<array{id: string, description: string, icon: ?string}>
      */
     public function listEnabledMethods(): array;
 

@@ -77,7 +77,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             fn (array $method): array => [
                 'id' => $method['id'],
                 'label' => $method['label'],
-                'icon' => $this->methodIcon($method['id']),
+                'icon' => $method['icon'] ?? null,
             ],
             $this->providerMethodDefinitions(),
         );
@@ -96,7 +96,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                 self::ID,
                 self::ID.':'.$method['id'],
                 $method['label'],
-                $method['id'] === 'creditcard' ? '/images/payments/credit-card.svg' : $this->methodIcon($method['id']),
+                $method['icon'] ?? null,
             ),
             $methods,
         );
@@ -683,7 +683,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
     }
 
     /**
-     * @return list<array{id: string, label: string}>
+     * @return list<array{id: string, label: string, icon: ?string}>
      */
     private function providerMethodDefinitions(): array
     {
@@ -700,6 +700,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                         (string) ($method['id'] ?? ''),
                         (string) ($method['description'] ?? ''),
                     ),
+                    'icon' => is_string($method['icon'] ?? null) ? $method['icon'] : null,
                 ],
                 array_filter(
                     $api->listEnabledMethods(),
@@ -711,19 +712,8 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
         }
     }
 
-    private function methodIcon(string $id): ?string
-    {
-        return match ($id) {
-            'creditcard' => '/images/payments/credit-card.svg',
-            'ideal' => '/images/payments/ideal.svg',
-            'bancontact' => '/images/payments/bancontact.svg',
-            'paypal' => '/images/payments/paypal.svg',
-            default => '/images/payments/mollie.svg',
-        };
-    }
-
     /**
-     * @return list<array{id: string, label: string}>
+     * @return list<array{id: string, label: string, icon: ?string}>
      */
     private function availableMethodDefinitions(): array
     {
@@ -734,6 +724,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             return array_map(fn (string $id): array => [
                 'id' => $id,
                 'label' => $labels->get($id)['label'] ?? $this->methodLabel($id),
+                'icon' => $labels->get($id)['icon'] ?? null,
             ], $configured);
         }
 

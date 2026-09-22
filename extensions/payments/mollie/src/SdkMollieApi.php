@@ -78,6 +78,7 @@ final class SdkMollieApi implements MollieApi
                 $methods[] = [
                     'id' => (string) $method->id,
                     'description' => (string) $method->description,
+                    'icon' => $this->officialMethodIcon($method->image ?? null),
                 ];
             }
 
@@ -96,6 +97,22 @@ final class SdkMollieApi implements MollieApi
                 'email' => (string) ($customer->email ?? ''),
             ];
         });
+    }
+
+    private function officialMethodIcon(mixed $image): ?string
+    {
+        $svg = is_object($image) ? ($image->svg ?? null) : null;
+        if (! is_string($svg) || ! filter_var($svg, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $parts = parse_url($svg);
+        $host = is_array($parts) ? strtolower((string) ($parts['host'] ?? '')) : '';
+        if (($parts['scheme'] ?? null) !== 'https' || ! ($host === 'mollie.com' || str_ends_with($host, '.mollie.com'))) {
+            return null;
+        }
+
+        return $svg;
     }
 
     /**
