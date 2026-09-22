@@ -26,6 +26,7 @@ use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use App\Support\MoneyFormatter;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -68,8 +69,20 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
 
     public function checkoutMethods(): array
     {
-        // Mollie hosted checkout lists the configured payment methods.
-        return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
+        $methods = $this->availableMethodDefinitions();
+
+        if ($methods === []) {
+            return [new CheckoutPaymentMethod(self::ID, self::ID, $this->label())];
+        }
+
+        return array_map(
+            fn (array $method): CheckoutPaymentMethod => new CheckoutPaymentMethod(
+                self::ID,
+                self::ID.':'.$method['id'],
+                $method['label'],
+            ),
+            $methods,
+        );
     }
 
     public function initiate(PaymentInitiation $request): PaymentInitiationResult
@@ -95,12 +108,17 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             'locale' => $this->locale(),
         ];
 
-        // Prefer admin-restricted methods; otherwise Mollie hosted checkout shows profile methods.
-        $restricted = $this->enabledMethodIds();
-        if (count($restricted) === 1) {
-            $payload['method'] = $restricted[0];
-        } elseif (count($restricted) > 1) {
-            $payload['method'] = $restricted;
+        $selectedMethod = $request->metadata['checkout_method'] ?? null;
+        if (is_string($selectedMethod) && $selectedMethod !== '') {
+            $payload['method'] = $selectedMethod;
+        } else {
+            // Fall back to admin-restricted methods when no individual option was selected.
+            $restricted = $this->enabledMethodIds();
+            if (count($restricted) === 1) {
+                $payload['method'] = $restricted[0];
+            } elseif (count($restricted) > 1) {
+                $payload['method'] = $restricted;
+            }
         }
 
         $this->attachCustomerSequence($api, $request, $payload);
@@ -634,6 +652,50 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
             'en' => 'en_US',
             default => null,
         };
+    }
+
+    /**
+     * @return list<array{id: string, label: string}>
+     */
+    private function availableMethodDefinitions(): array
+    {
+        $configured = $this->enabledMethodIds();
+        if ($configured !== []) {
+            return array_map(fn (string $id): array => [
+                'id' => $id,
+                'label' => $this->methodLabel($id),
+            ], $configured);
+        }
+
+        $api = $this->client();
+        if ($api === null) {
+            return [];
+        }
+
+        try {
+            return array_values(array_map(
+                fn (array $method): array => [
+                    'id' => (string) ($method['id'] ?? ''),
+                    'label' => $this->methodLabel(
+                        (string) ($method['id'] ?? ''),
+                        (string) ($method['description'] ?? ''),
+                    ),
+                ],
+                array_filter(
+                    $api->listEnabledMethods(),
+                    static fn (array $method): bool => filled($method['id'] ?? null),
+                ),
+            ));
+        } catch (MollieProviderException) {
+            return [];
+        }
+    }
+
+    private function methodLabel(string $id, string $fallback = ''): string
+    {
+        $key = 'mollie::messages.methods.'.$id;
+
+        return Lang::has($key) ? $key : ($fallback !== '' ? $fallback : ucfirst($id));
     }
 
     /**
