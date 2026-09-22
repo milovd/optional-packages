@@ -80,6 +80,7 @@ final class MolliePaymentGateway implements CancelsPayments, ChargesRecurringPay
                 self::ID,
                 self::ID.':'.$method['id'],
                 $method['label'],
+                $method['id'] === 'creditcard' ? '/images/payments/credit-card.svg' : null,
             ),
             $methods,
         );

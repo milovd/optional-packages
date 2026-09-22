@@ -15,7 +15,7 @@ return [
     'methods' => [
         'ideal' => 'iDEAL',
         'bancontact' => 'Bancontact',
-        'creditcard' => 'Card',
+        'creditcard' => 'Credit card',
         'paypal' => 'PayPal',
         'applepay' => 'Apple Pay',
         'klarna' => 'Klarna',
