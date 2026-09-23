@@ -7,6 +7,10 @@ return [
         'api_key_help' => 'Bewaar de Paddle Billing API-sleutel in de versleutelde extensie-instellingen.',
         'webhook_secret' => 'Webhookgeheim',
         'webhook_secret_help' => 'Geheim van de Paddle-notificatiedestination.',
+        'webhooks_enabled' => 'Webhookverwerking inschakelen',
+        'webhooks_enabled_help' => 'Laat ingeschakeld voor payment-, refund- en subscription-events. Schakel dit alleen uit voor lokale checkouttests zonder publiek webhookendpoint.',
+        'enabled_methods' => 'Ingeschakelde betaalmethodes',
+        'enabled_methods_help' => 'Selecteer de afzonderlijke Paddle-methodes die je wilt aanbieden. Paddle bepaalt per transaction, land, valuta en account welke methode uiteindelijk beschikbaar is.',
         'sandbox' => 'Sandboxmodus',
         'sandbox_help' => 'Gebruik het Paddle-sandboxendpoint.',
     ],
@@ -45,5 +49,6 @@ return [
         'missing_key' => 'Paddle API-sleutel ontbreekt.',
         'missing_webhook' => 'Paddle webhookgeheim ontbreekt.',
         'ok' => 'Paddle is geconfigureerd voor :mode. Webhook: :webhook',
+        'ok_without_webhook' => 'Paddle is geconfigureerd voor :mode. Webhookverwerking is uitgeschakeld voor lokaal testen.',
     ],
 ];

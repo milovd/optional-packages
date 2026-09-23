@@ -19,7 +19,9 @@ final class PaddleExtension implements Extension
     {
         $context->setting(new ExtensionSettingDefinition('api_key', 'paddle::messages.settings.api_key', 'string', secret: true, required: true, help: 'paddle::messages.settings.api_key_help'));
         $context->setting(new ExtensionSettingDefinition('webhook_secret', 'paddle::messages.settings.webhook_secret', 'string', secret: true, required: false, help: 'paddle::messages.settings.webhook_secret_help'));
+        $context->setting(new ExtensionSettingDefinition('webhooks_enabled', 'paddle::messages.settings.webhooks_enabled', 'boolean', required: true, help: 'paddle::messages.settings.webhooks_enabled_help'));
         $context->setting(new ExtensionSettingDefinition('sandbox', 'paddle::messages.settings.sandbox', 'boolean', required: true, help: 'paddle::messages.settings.sandbox_help'));
+        $context->setting(new ExtensionSettingDefinition('enabled_methods', 'paddle::messages.settings.enabled_methods', 'payment_methods'));
         $context->paymentGateway(app(PaddlePaymentGateway::class));
         $context->health(static fn () => app(PaddlePaymentGateway::class)->health());
     }

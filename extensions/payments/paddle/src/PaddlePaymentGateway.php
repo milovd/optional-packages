@@ -7,10 +7,12 @@ namespace Agovena\Extensions\Paddle;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
+use App\Agovena\Payments\Contracts\ConfiguresCheckoutMethods;
 use App\Agovena\Payments\Contracts\HandlesProviderRefundEvents;
 use App\Agovena\Payments\Contracts\ManagesProviderSubscriptions;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\PaymentGateway;
+use App\Agovena\Payments\Contracts\RefreshesCheckoutMethods;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
 use App\Agovena\Payments\Contracts\ValidatesWebhookPayload;
 use App\Agovena\Payments\HealthResult;
@@ -29,7 +31,7 @@ use App\Models\PaymentAttempt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-final class PaddlePaymentGateway implements HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, SynchronizesPayments, ValidatesWebhookPayload
+final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, RefreshesCheckoutMethods, SynchronizesPayments, ValidatesWebhookPayload
 {
     public const ID = 'paddle';
 
@@ -94,35 +96,60 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
             refunds: true,
             partialRefunds: true,
             recurring: true,
-            webhooks: true,
+            webhooks: $this->webhooksEnabled() && $this->webhookSecret() !== null,
             redirect: true,
             statusSync: true,
         );
     }
 
+    /**
+     * @return list<array{id: string, label: string, icon: ?string}>
+     */
+    public function configurableCheckoutMethods(): array
+    {
+        return array_map(
+            static fn (string $method): array => [
+                'id' => $method,
+                'label' => 'paddle::messages.methods.'.$method,
+                'icon' => $method === 'south_korea_local_card' ? 'ag:payment-method/card' : null,
+            ],
+            self::CHECKOUT_METHOD_IDS,
+        );
+    }
+
+    /**
+     * @return list<array{id: string, label: string, icon: ?string}>
+     */
+    public function refreshConfigurableCheckoutMethods(): array
+    {
+        return $this->configurableCheckoutMethods();
+    }
+
     public function checkoutMethods(): array
     {
         $methods = [];
+        $enabledMethods = $this->enabledMethodIds();
+        if ($enabledMethods === []) {
+            $enabledMethods = self::CHECKOUT_METHOD_IDS;
+        }
 
-        foreach (self::CHECKOUT_METHOD_IDS as $method) {
+        foreach ($this->configurableCheckoutMethods() as $definition) {
+            $method = $definition['id'];
+            if (! in_array($method, $enabledMethods, true)) {
+                continue;
+            }
+
             $methods[] = new CheckoutPaymentMethod(
                 gatewayId: self::ID,
                 id: self::ID.':'.$method,
-                label: 'paddle::messages.methods.'.$method,
-                icon: $method === 'south_korea_local_card' ? 'ag:payment-method/card' : null,
+                label: $definition['label'],
+                icon: $definition['icon'],
                 metadata: [
                     'provider_method' => $method,
                     'customer_countries' => self::CHECKOUT_METHOD_COUNTRIES[$method] ?? [],
                 ],
             );
         }
-
-        $methods[] = new CheckoutPaymentMethod(
-            gatewayId: self::ID,
-            id: self::ID.':paddle',
-            label: $this->label(),
-            metadata: ['provider_method' => null, 'customer_countries' => []],
-        );
 
         return $methods;
     }
@@ -375,6 +402,10 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
 
     public function verifyWebhook(Request $request): bool
     {
+        if (! $this->webhooksEnabled()) {
+            return false;
+        }
+
         $secret = $this->webhookSecret();
         $body = $request->getContent();
         $header = (string) $request->header('Paddle-Signature', '');
@@ -557,7 +588,7 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
         if ($this->apiKey() === null) {
             return HealthResult::fail(__('paddle::messages.health.missing_key'));
         }
-        if ($this->webhookSecret() === null) {
+        if ($this->webhooksEnabled() && $this->webhookSecret() === null) {
             return HealthResult::fail(__('paddle::messages.health.missing_webhook'));
         }
 
@@ -574,8 +605,13 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
             }
         }
 
+        $mode = $this->sandbox() ? 'sandbox' : 'live';
+        if (! $this->webhooksEnabled()) {
+            return HealthResult::ok(__('paddle::messages.health.ok_without_webhook', ['mode' => $mode]));
+        }
+
         return HealthResult::ok(__('paddle::messages.health.ok', [
-            'mode' => $this->sandbox() ? 'sandbox' : 'live',
+            'mode' => $mode,
             'webhook' => route('webhooks.payments', ['gateway' => self::ID], true),
         ]));
     }
@@ -719,6 +755,11 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
         return $this->settingString('webhook_secret');
     }
 
+    private function webhooksEnabled(): bool
+    {
+        return filter_var($this->settings->get(self::ID, 'webhooks_enabled', true), FILTER_VALIDATE_BOOLEAN);
+    }
+
     private function settingString(string $key): ?string
     {
         $value = $this->settings->get(self::ID, $key);
@@ -729,6 +770,22 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
     private function sandbox(): bool
     {
         return filter_var($this->settings->get(self::ID, 'sandbox', true), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /** @return list<string> */
+    private function enabledMethodIds(): array
+    {
+        $value = $this->settings->get(self::ID, 'enabled_methods', '');
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $ids = array_values(array_unique(array_filter(
+            array_map('trim', explode(',', $value)),
+            static fn (string $id): bool => $id !== '',
+        )));
+
+        return array_values(array_intersect(self::CHECKOUT_METHOD_IDS, $ids));
     }
 
     private function latestExternalAttempt(Payment $payment): ?PaymentAttempt

@@ -7,6 +7,10 @@ return [
         'api_key_help' => 'Store the Paddle Billing API key in the encrypted extension settings.',
         'webhook_secret' => 'Webhook secret',
         'webhook_secret_help' => 'Secret for the Paddle notification destination.',
+        'webhooks_enabled' => 'Enable webhook processing',
+        'webhooks_enabled_help' => 'Keep enabled for payment, refund, and subscription events. Disable only for local checkout testing without a public webhook endpoint.',
+        'enabled_methods' => 'Enabled payment methods',
+        'enabled_methods_help' => 'Select the individual Paddle methods to offer. Paddle still decides final availability per transaction, country, currency, and account.',
         'sandbox' => 'Sandbox mode',
         'sandbox_help' => 'Use the Paddle sandbox API endpoint.',
     ],
@@ -45,5 +49,6 @@ return [
         'missing_key' => 'Paddle API key is missing.',
         'missing_webhook' => 'Paddle webhook secret is missing.',
         'ok' => 'Paddle is configured for :mode. Webhook: :webhook',
+        'ok_without_webhook' => 'Paddle is configured for :mode. Webhook processing is disabled for local testing.',
     ],
 ];

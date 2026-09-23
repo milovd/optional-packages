@@ -26,9 +26,18 @@
             "type": "string",
             "secret": true,
             "required": false,
-            "connection": true,
+            "connection": false,
             "default": "",
             "help": "paddle::messages.settings.webhook_secret_help"
+        },
+        {
+            "key": "webhooks_enabled",
+            "label": "paddle::messages.settings.webhooks_enabled",
+            "type": "boolean",
+            "secret": false,
+            "required": true,
+            "default": true,
+            "help": "paddle::messages.settings.webhooks_enabled_help"
         },
         {
             "key": "sandbox",
@@ -39,6 +48,15 @@
             "connection_context": true,
             "default": true,
             "help": "paddle::messages.settings.sandbox_help"
+        },
+        {
+            "key": "enabled_methods",
+            "label": "paddle::messages.settings.enabled_methods",
+            "type": "payment_methods",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "paddle::messages.settings.enabled_methods_help"
         }
     ]
 }
