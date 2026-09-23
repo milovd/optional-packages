@@ -7,6 +7,7 @@ namespace Agovena\Extensions\Paddle;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
+use App\Agovena\Payments\Contracts\HandlesProviderRefundEvents;
 use App\Agovena\Payments\Contracts\ManagesProviderSubscriptions;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\PaymentGateway;
@@ -16,6 +17,7 @@ use App\Agovena\Payments\HealthResult;
 use App\Agovena\Payments\PaymentGatewayCapabilities;
 use App\Agovena\Payments\PaymentInitiation;
 use App\Agovena\Payments\PaymentInitiationResult;
+use App\Agovena\Payments\ProviderRefundEvent;
 use App\Agovena\Payments\ProviderSubscriptionEvent;
 use App\Agovena\Payments\RefundRequest;
 use App\Agovena\Payments\RefundResult;
@@ -27,7 +29,7 @@ use App\Models\PaymentAttempt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-final class PaddlePaymentGateway implements ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, SynchronizesPayments, ValidatesWebhookPayload
+final class PaddlePaymentGateway implements HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, SynchronizesPayments, ValidatesWebhookPayload
 {
     public const ID = 'paddle';
 
@@ -255,6 +257,27 @@ final class PaddlePaymentGateway implements ManagesProviderSubscriptions, Offers
         );
     }
 
+    public function providerRefundEvent(WebhookPayload $payload): ?ProviderRefundEvent
+    {
+        if (($payload->raw['event_type'] ?? null) !== 'adjustment.updated') {
+            return null;
+        }
+
+        $adjustmentId = $payload->raw['adjustment_id'] ?? null;
+        $transactionId = $payload->raw['object_id'] ?? null;
+        if (! is_string($adjustmentId) || ! str_starts_with($adjustmentId, 'adj_')
+            || ! is_string($transactionId) || ! str_starts_with($transactionId, 'txn_')) {
+            return null;
+        }
+
+        return new ProviderRefundEvent(
+            gatewayId: self::ID,
+            externalRefundId: $adjustmentId,
+            transactionId: $transactionId,
+            status: (string) ($payload->raw['status'] ?? ''),
+        );
+    }
+
     public function verifyWebhook(Request $request): bool
     {
         $secret = $this->webhookSecret();
@@ -296,6 +319,7 @@ final class PaddlePaymentGateway implements ManagesProviderSubscriptions, Offers
             raw: [
                 'event_type' => $type,
                 'object_id' => $externalId,
+                'adjustment_id' => $type === 'adjustment.updated' ? ($data['id'] ?? null) : null,
                 'status' => $data['status'] ?? null,
                 'currency_code' => $data['currency_code'] ?? null,
                 'amount_minor' => $data['details']['totals']['grand_total'] ?? null,
@@ -376,7 +400,9 @@ final class PaddlePaymentGateway implements ManagesProviderSubscriptions, Offers
                 static fn (mixed $item): bool => is_array($item),
             ));
             $lineItemId = $lineItems[0]['id'] ?? null;
-            if (! is_string($lineItemId) || $lineItemId === '') {
+            if (count($lineItems) !== 1
+                || ! is_string($lineItemId)
+                || ! str_starts_with($lineItemId, 'txnitm_')) {
                 return RefundResult::fail(__('paddle::messages.errors.refund_failed'));
             }
 
@@ -404,7 +430,9 @@ final class PaddlePaymentGateway implements ManagesProviderSubscriptions, Offers
             return RefundResult::fail(__('paddle::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok($externalRefundId);
+        return RefundResult::ok($externalRefundId, [
+            'provider_status' => (string) ($adjustment['status'] ?? 'pending_approval'),
+        ]);
     }
 
     public function syncStatus(Payment $payment): Payment
