@@ -228,8 +228,13 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
 
             try {
                 $preview = $api->previewTransaction($previewPayload);
-            } catch (PaddleProviderException) {
-                return PaymentInitiationResult::failed(__('paddle::messages.errors.payment_methods_unavailable'));
+            } catch (PaddleProviderException $exception) {
+                $this->logProviderFailure('payment.paddle.preview_failed', $request->order, $exception);
+
+                return PaymentInitiationResult::failed(
+                    $this->providerFailureMessage($exception, 'paddle::messages.errors.payment_methods_unavailable'),
+                    $this->providerFailureMetadata($exception),
+                );
             }
 
             $availableMethods = $this->normalizePaymentMethods($preview['available_payment_methods'] ?? null);
@@ -241,16 +246,16 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
         try {
             $transaction = $api->createTransaction($payload, $request->idempotencyKey);
         } catch (PaddleProviderException $exception) {
-            Log::warning('payment.initiate.failed', [
-                'gateway_id' => self::ID,
-                'order_id' => $request->order->id,
-            ]);
+            $this->logProviderFailure('payment.initiate.failed', $request->order, $exception);
 
             if ($exception->errorKey === 'paddle::messages.errors.unknown_outcome') {
                 return PaymentInitiationResult::unknown(message: __($exception->errorKey));
             }
 
-            return PaymentInitiationResult::failed(__('paddle::messages.errors.create_failed'));
+            return PaymentInitiationResult::failed(
+                $this->providerFailureMessage($exception, 'paddle::messages.errors.create_failed'),
+                $this->providerFailureMetadata($exception),
+            );
         }
 
         $url = $transaction['checkout']['url'] ?? $transaction['url'] ?? null;
@@ -770,6 +775,34 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
     private function sandbox(): bool
     {
         return filter_var($this->settings->get(self::ID, 'sandbox', true), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function providerFailureMessage(PaddleProviderException $exception, string $fallback): string
+    {
+        return match ($exception->providerCode) {
+            'transaction_default_checkout_url_not_set' => __('paddle::messages.errors.default_payment_link_missing'),
+            default => __($fallback),
+        };
+    }
+
+    /** @return array<string, mixed> */
+    private function providerFailureMetadata(PaddleProviderException $exception): array
+    {
+        return array_filter([
+            'provider_error_code' => $exception->providerCode,
+            'provider_http_status' => $exception->httpStatus,
+        ], static fn (mixed $value): bool => $value !== null && $value !== '');
+    }
+
+    private function logProviderFailure(string $event, Order $order, PaddleProviderException $exception): void
+    {
+        Log::warning($event, array_filter([
+            'gateway_id' => self::ID,
+            'order_id' => $order->id,
+            'provider_error_code' => $exception->providerCode,
+            'provider_http_status' => $exception->httpStatus,
+            'provider_detail' => $exception->providerDetail,
+        ], static fn (mixed $value): bool => $value !== null && $value !== ''));
     }
 
     /** @return list<string> */

@@ -100,10 +100,25 @@ final class HttpPaddleApi implements PaddleApi, PaddleConnectionChecker
                 'patch' => $request->patch($this->baseUrl.$path, $payload),
                 default => $request->post($this->baseUrl.$path, $payload),
             };
-            $response->throw();
+            if ($response->failed()) {
+                $error = $response->json('error');
+                $error = is_array($error) ? $error : [];
+                $providerCode = is_string($error['code'] ?? null) ? $error['code'] : null;
+                $providerDetail = is_string($error['detail'] ?? null) ? $error['detail'] : null;
+
+                throw PaddleProviderException::failed(
+                    'paddle::messages.errors.request_failed',
+                    $providerCode,
+                    $providerDetail,
+                    $response->status(),
+                );
+            }
+
             $data = $response->json('data');
         } catch (ConnectionException) {
             throw PaddleProviderException::unknown('paddle::messages.errors.unknown_outcome');
+        } catch (PaddleProviderException $exception) {
+            throw $exception;
         } catch (Throwable) {
             throw PaddleProviderException::failed('paddle::messages.errors.request_failed');
         }
