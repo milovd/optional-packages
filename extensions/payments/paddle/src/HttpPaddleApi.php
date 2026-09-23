@@ -24,6 +24,11 @@ final class HttpPaddleApi implements PaddleApi, PaddleConnectionChecker
         return $this->request('post', '/transactions', $payload, $idempotencyKey);
     }
 
+    public function previewTransaction(array $payload): array
+    {
+        return $this->request('post', '/transactions/preview', $payload);
+    }
+
     public function getTransaction(string $transactionId): array
     {
         return $this->request('get', '/transactions/'.rawurlencode($transactionId));

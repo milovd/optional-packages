@@ -33,6 +33,42 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
 {
     public const ID = 'paddle';
 
+    /** @var array<string, list<string>> */
+    private const CHECKOUT_METHOD_COUNTRIES = [
+        'alipay' => ['CN'],
+        'bancontact' => ['BE'],
+        'blik' => ['PL'],
+        'ideal' => ['NL'],
+        'kakao_pay' => ['KR'],
+        'mb_way' => ['PT'],
+        'naver_pay' => ['KR'],
+        'payco' => ['KR'],
+        'pix' => ['BR'],
+        'samsung_pay' => ['KR'],
+        'south_korea_local_card' => ['KR'],
+        'upi' => ['IN'],
+    ];
+
+    /** @var list<string> */
+    private const CHECKOUT_METHOD_IDS = [
+        'card',
+        'apple_pay',
+        'google_pay',
+        'paypal',
+        'alipay',
+        'bancontact',
+        'blik',
+        'ideal',
+        'kakao_pay',
+        'mb_way',
+        'naver_pay',
+        'payco',
+        'pix',
+        'samsung_pay',
+        'south_korea_local_card',
+        'upi',
+    ];
+
     /** @var array<string, mixed>|null */
     private ?array $verifiedEvent = null;
 
@@ -66,7 +102,29 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
 
     public function checkoutMethods(): array
     {
-        return [new CheckoutPaymentMethod(self::ID, self::ID.':paddle', $this->label())];
+        $methods = [];
+
+        foreach (self::CHECKOUT_METHOD_IDS as $method) {
+            $methods[] = new CheckoutPaymentMethod(
+                gatewayId: self::ID,
+                id: self::ID.':'.$method,
+                label: 'paddle::messages.methods.'.$method,
+                icon: null,
+                metadata: [
+                    'provider_method' => $method,
+                    'customer_countries' => self::CHECKOUT_METHOD_COUNTRIES[$method] ?? [],
+                ],
+            );
+        }
+
+        $methods[] = new CheckoutPaymentMethod(
+            gatewayId: self::ID,
+            id: self::ID.':paddle',
+            label: $this->label(),
+            metadata: ['provider_method' => null, 'customer_countries' => []],
+        );
+
+        return $methods;
     }
 
     public function initiate(PaymentInitiation $request): PaymentInitiationResult
@@ -111,16 +169,50 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
             }
         }
 
-        try {
-            $transaction = $api->createTransaction([
+        $payload = [
+            'items' => $items,
+            'currency_code' => $currency,
+            'collection_mode' => 'automatic',
+            'custom_data' => [
+                'order_id' => (string) $request->order->id,
+                'payment_id' => (string) $request->payment->id,
+            ],
+        ];
+        $providerMethod = $this->requestedProviderMethod($request->metadata['checkout_method'] ?? null);
+        $requestedMethod = $request->metadata['checkout_method'] ?? null;
+        $legacyAutomaticMethods = [self::ID, self::ID.':paddle'];
+        if ($requestedMethod !== null && ! in_array($requestedMethod, $legacyAutomaticMethods, true) && $providerMethod === null) {
+            return PaymentInitiationResult::failed(__('paddle::messages.errors.payment_method_unavailable'));
+        }
+
+        if ($providerMethod !== null) {
+            $previewPayload = [
                 'items' => $items,
                 'currency_code' => $currency,
-                'collection_mode' => 'automatic',
-                'custom_data' => [
-                    'order_id' => (string) $request->order->id,
-                    'payment_id' => (string) $request->payment->id,
-                ],
-            ], $request->idempotencyKey);
+            ];
+            $country = strtoupper(trim((string) ($request->order->billing_country ?? '')));
+            $postalCode = trim((string) ($request->order->billing_postal_code ?? ''));
+            if ($country !== '') {
+                $previewPayload['address'] = array_filter([
+                    'country_code' => $country,
+                    'postal_code' => $postalCode,
+                ], static fn (string $value): bool => $value !== '');
+            }
+
+            try {
+                $preview = $api->previewTransaction($previewPayload);
+            } catch (PaddleProviderException) {
+                return PaymentInitiationResult::failed(__('paddle::messages.errors.payment_methods_unavailable'));
+            }
+
+            $availableMethods = $this->normalizePaymentMethods($preview['available_payment_methods'] ?? null);
+            if ($availableMethods === [] || ! in_array($providerMethod, $availableMethods, true)) {
+                return PaymentInitiationResult::failed(__('paddle::messages.errors.payment_method_unavailable'));
+            }
+        }
+
+        try {
+            $transaction = $api->createTransaction($payload, $request->idempotencyKey);
         } catch (PaddleProviderException $exception) {
             Log::warning('payment.initiate.failed', [
                 'gateway_id' => self::ID,
@@ -142,6 +234,9 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
         $externalId = $transaction['id'] ?? null;
         if (! is_string($externalId) || trim($externalId) === '') {
             return PaymentInitiationResult::failed(__('paddle::messages.errors.create_failed'));
+        }
+        if ($providerMethod !== null) {
+            $url = $this->restrictHostedCheckout($url, $providerMethod);
         }
 
         return PaymentInitiationResult::redirect(
@@ -563,6 +658,34 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
         $meta['provider_subscription_id'] = $subscriptionId;
         $attempt->response_meta = $meta;
         $attempt->save();
+    }
+
+    private function requestedProviderMethod(mixed $checkoutMethod): ?string
+    {
+        if (! is_string($checkoutMethod) || $checkoutMethod === '' || $checkoutMethod === self::ID) {
+            return null;
+        }
+
+        $prefix = self::ID.':';
+        $method = str_starts_with($checkoutMethod, $prefix)
+            ? substr($checkoutMethod, strlen($prefix))
+            : $checkoutMethod;
+
+        return in_array($method, self::CHECKOUT_METHOD_IDS, true) ? $method : null;
+    }
+
+    private function restrictHostedCheckout(string $url, string $method): string
+    {
+        $fragment = '';
+        $fragmentPosition = strpos($url, '#');
+        if ($fragmentPosition !== false) {
+            $fragment = substr($url, $fragmentPosition);
+            $url = substr($url, 0, $fragmentPosition);
+        }
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url.$separator.'allowed_payment_methods='.rawurlencode($method).$fragment;
     }
 
     /** @return list<string> */

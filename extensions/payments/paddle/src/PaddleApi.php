@@ -9,6 +9,9 @@ interface PaddleApi
     /** @param array<string, mixed> $payload */
     public function createTransaction(array $payload, ?string $idempotencyKey = null): array;
 
+    /** @param array<string, mixed> $payload */
+    public function previewTransaction(array $payload): array;
+
     /** @return array<string, mixed> */
     public function getTransaction(string $transactionId): array;
 
