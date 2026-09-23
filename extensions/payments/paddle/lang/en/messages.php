@@ -57,6 +57,7 @@ return [
         'title' => 'Paddle checkout',
         'loading' => 'Loading the secure Paddle checkout.',
         'missing_client_token' => 'Paddle checkout is not configured. Add the client-side token in Admin > Extensions > Paddle.',
+        'missing_transaction' => 'This Paddle checkout link is missing its transaction. Start the payment again from the order.',
         'javascript_required' => 'JavaScript is required to open the secure Paddle checkout.',
     ],
 ];

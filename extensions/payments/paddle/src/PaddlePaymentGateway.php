@@ -112,6 +112,11 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
         return $this->sandbox();
     }
 
+    public static function supportsCheckoutMethod(string $method): bool
+    {
+        return in_array($method, self::CHECKOUT_METHOD_IDS, true);
+    }
+
     /**
      * @return list<array{id: string, label: string, icon: ?string}>
      */

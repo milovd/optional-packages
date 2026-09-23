@@ -54,9 +54,10 @@ return [
         'ok' => 'Paddle is geconfigureerd voor :mode. Webhook: :webhook',
     ],
     'checkout' => [
-        'title' => 'Paddle-checkout',
+        'title' => 'Paddle checkout',
         'loading' => 'De beveiligde Paddle-checkout wordt geladen.',
         'missing_client_token' => 'Paddle-checkout is niet geconfigureerd. Voeg het client-side token toe via Admin > Extensions > Paddle.',
-        'javascript_required' => 'JavaScript is nodig om de beveiligde Paddle-checkout te openen.',
+        'missing_transaction' => 'Deze Paddle-checkoutlink bevat geen transaction. Start de betaling opnieuw vanuit de bestelling.',
+        'javascript_required' => 'JavaScript is vereist om de beveiligde Paddle-checkout te openen.',
     ],
 ];
