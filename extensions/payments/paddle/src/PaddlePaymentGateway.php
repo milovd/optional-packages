@@ -96,10 +96,20 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
             refunds: true,
             partialRefunds: true,
             recurring: true,
-            webhooks: $this->webhooksEnabled() && $this->webhookSecret() !== null,
+            webhooks: true,
             redirect: true,
             statusSync: true,
         );
+    }
+
+    public function clientSideToken(): ?string
+    {
+        return $this->settingString('client_token');
+    }
+
+    public function isSandbox(): bool
+    {
+        return $this->sandbox();
     }
 
     /**
@@ -407,10 +417,6 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
 
     public function verifyWebhook(Request $request): bool
     {
-        if (! $this->webhooksEnabled()) {
-            return false;
-        }
-
         $secret = $this->webhookSecret();
         $body = $request->getContent();
         $header = (string) $request->header('Paddle-Signature', '');
@@ -593,8 +599,14 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
         if ($this->apiKey() === null) {
             return HealthResult::fail(__('paddle::messages.health.missing_key'));
         }
-        if ($this->webhooksEnabled() && $this->webhookSecret() === null) {
+        if ($this->clientSideToken() === null) {
+            return HealthResult::fail(__('paddle::messages.health.missing_client_token'));
+        }
+        if ($this->webhookSecret() === null) {
             return HealthResult::fail(__('paddle::messages.health.missing_webhook'));
+        }
+        if (! $this->clientTokenMatchesMode()) {
+            return HealthResult::fail(__('paddle::messages.health.client_token_mode_mismatch'));
         }
 
         $api = $this->client();
@@ -611,10 +623,6 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
         }
 
         $mode = $this->sandbox() ? 'sandbox' : 'live';
-        if (! $this->webhooksEnabled()) {
-            return HealthResult::ok(__('paddle::messages.health.ok_without_webhook', ['mode' => $mode]));
-        }
-
         return HealthResult::ok(__('paddle::messages.health.ok', [
             'mode' => $mode,
             'webhook' => route('webhooks.payments', ['gateway' => self::ID], true),
@@ -760,11 +768,6 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
         return $this->settingString('webhook_secret');
     }
 
-    private function webhooksEnabled(): bool
-    {
-        return filter_var($this->settings->get(self::ID, 'webhooks_enabled', true), FILTER_VALIDATE_BOOLEAN);
-    }
-
     private function settingString(string $key): ?string
     {
         $value = $this->settings->get(self::ID, $key);
@@ -775,6 +778,18 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
     private function sandbox(): bool
     {
         return filter_var($this->settings->get(self::ID, 'sandbox', true), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function clientTokenMatchesMode(): bool
+    {
+        $token = $this->clientSideToken();
+        if ($token === null || (! str_starts_with($token, 'test_') && ! str_starts_with($token, 'live_'))) {
+            return false;
+        }
+
+        return $this->sandbox()
+            ? str_starts_with($token, 'test_')
+            : str_starts_with($token, 'live_');
     }
 
     private function providerFailureMessage(PaddleProviderException $exception, string $fallback): string

@@ -7,6 +7,7 @@ namespace Agovena\Extensions\Paddle;
 use App\Agovena\Extensions\Contracts\Extension;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 final class PaddleServiceProvider extends ServiceProvider
@@ -26,6 +27,10 @@ final class PaddleServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadTranslationsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'lang', 'paddle');
+        $this->loadViewsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'resources'.DIRECTORY_SEPARATOR.'views', 'paddle');
+        Route::get('/paddle/checkout', PaddleCheckoutPage::class)
+            ->middleware('web')
+            ->name('paddle.checkout');
     }
 
     public function extension(): Extension

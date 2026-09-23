@@ -5,10 +5,10 @@ return [
     'settings' => [
         'api_key' => 'API key',
         'api_key_help' => 'Store the Paddle Billing API key in the encrypted extension settings.',
+        'client_token' => 'Client-side token',
+        'client_token_help' => 'Use a Paddle Sandbox token starting with test_ in Sandbox mode, or a live_ token in live mode. This token is safe to expose on the Paddle checkout launcher page.',
         'webhook_secret' => 'Webhook secret',
         'webhook_secret_help' => 'Secret for the Paddle notification destination.',
-        'webhooks_enabled' => 'Enable webhook processing',
-        'webhooks_enabled_help' => 'Keep enabled for payment, refund, and subscription events. Disable only for local checkout testing without a public webhook endpoint.',
         'enabled_methods' => 'Enabled payment methods',
         'enabled_methods_help' => 'Select the individual Paddle methods to offer. Paddle still decides final availability per transaction, country, currency, and account.',
         'sandbox' => 'Sandbox mode',
@@ -48,8 +48,15 @@ return [
     ],
     'health' => [
         'missing_key' => 'Paddle API key is missing.',
+        'missing_client_token' => 'Paddle client-side token is missing.',
         'missing_webhook' => 'Paddle webhook secret is missing.',
+        'client_token_mode_mismatch' => 'The Paddle client-side token does not match the selected Sandbox or live mode.',
         'ok' => 'Paddle is configured for :mode. Webhook: :webhook',
-        'ok_without_webhook' => 'Paddle is configured for :mode. Webhook processing is disabled for local testing.',
+    ],
+    'checkout' => [
+        'title' => 'Paddle checkout',
+        'loading' => 'Loading the secure Paddle checkout.',
+        'missing_client_token' => 'Paddle checkout is not configured. Add the client-side token in Admin > Extensions > Paddle.',
+        'javascript_required' => 'JavaScript is required to open the secure Paddle checkout.',
     ],
 ];

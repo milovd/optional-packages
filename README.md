@@ -52,8 +52,7 @@ Package identity comes from each package manifest (`module.json` or `extension.j
 
 3. Agovena clones this repository (cached under `storage/app/packages/monorepo-cache/`), copies the mapped subdirectory into `storage/app/packages/modules/{id}` or `storage/app/packages/extensions/{id}`, registers autoloading, and runs the package lifecycle (`install` → `enable`).
 
-The catalog includes the Domains module, one integrated Cloudflare domain extension for Cloudflare Registrar plus DNS management, one separate Namecheap domain extension for registration and renewal management, five payment gateways, nine provisioning adapters, and the PostNL shipping adapter. Provider manifests remain explicitly non-production-ready
-until the corresponding sandbox acceptance checklist has been completed.
+The catalog includes the Domains module, one integrated Cloudflare domain extension for Cloudflare Registrar plus DNS management, one separate Namecheap domain extension for registration and renewal management, five payment gateways, nine provisioning adapters, and the PostNL shipping adapter. Paddle is marked production-ready for its supported hosted-checkout contract, including its public Paddle.js launcher and mandatory webhook configuration. The remaining provider manifests remain explicitly non-production-ready until their corresponding sandbox acceptance checklists have been completed.
 
 ## Updates
 

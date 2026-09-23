@@ -5,10 +5,10 @@ return [
     'settings' => [
         'api_key' => 'API-sleutel',
         'api_key_help' => 'Bewaar de Paddle Billing API-sleutel in de versleutelde extensie-instellingen.',
+        'client_token' => 'Client-side token',
+        'client_token_help' => 'Gebruik in Sandbox een Paddle-token dat begint met test_, of in live mode een live_-token. Dit token mag op de Paddle-checkoutlauncher aan de browser worden gegeven.',
         'webhook_secret' => 'Webhookgeheim',
         'webhook_secret_help' => 'Geheim van de Paddle-notificatiedestination.',
-        'webhooks_enabled' => 'Webhookverwerking inschakelen',
-        'webhooks_enabled_help' => 'Laat ingeschakeld voor payment-, refund- en subscription-events. Schakel dit alleen uit voor lokale checkouttests zonder publiek webhookendpoint.',
         'enabled_methods' => 'Ingeschakelde betaalmethodes',
         'enabled_methods_help' => 'Selecteer de afzonderlijke Paddle-methodes die je wilt aanbieden. Paddle bepaalt per transaction, land, valuta en account welke methode uiteindelijk beschikbaar is.',
         'sandbox' => 'Sandboxmodus',
@@ -48,8 +48,15 @@ return [
     ],
     'health' => [
         'missing_key' => 'Paddle API-sleutel ontbreekt.',
+        'missing_client_token' => 'Paddle client-side token ontbreekt.',
         'missing_webhook' => 'Paddle webhookgeheim ontbreekt.',
+        'client_token_mode_mismatch' => 'Het Paddle client-side token past niet bij de gekozen Sandbox- of livemode.',
         'ok' => 'Paddle is geconfigureerd voor :mode. Webhook: :webhook',
-        'ok_without_webhook' => 'Paddle is geconfigureerd voor :mode. Webhookverwerking is uitgeschakeld voor lokaal testen.',
+    ],
+    'checkout' => [
+        'title' => 'Paddle-checkout',
+        'loading' => 'De beveiligde Paddle-checkout wordt geladen.',
+        'missing_client_token' => 'Paddle-checkout is niet geconfigureerd. Voeg het client-side token toe via Admin > Extensions > Paddle.',
+        'javascript_required' => 'JavaScript is nodig om de beveiligde Paddle-checkout te openen.',
     ],
 ];
