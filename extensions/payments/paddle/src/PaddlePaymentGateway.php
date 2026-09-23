@@ -109,7 +109,7 @@ final class PaddlePaymentGateway implements HandlesProviderRefundEvents, Manages
                 gatewayId: self::ID,
                 id: self::ID.':'.$method,
                 label: 'paddle::messages.methods.'.$method,
-                icon: null,
+                icon: $method === 'south_korea_local_card' ? 'ag:payment-method/card' : null,
                 metadata: [
                     'provider_method' => $method,
                     'customer_countries' => self::CHECKOUT_METHOD_COUNTRIES[$method] ?? [],
