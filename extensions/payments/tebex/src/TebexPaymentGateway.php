@@ -6,7 +6,10 @@ namespace Agovena\Extensions\Tebex;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
+use App\Agovena\Payments\ApplyProviderRefundEvent;
 use App\Agovena\Payments\CheckoutPaymentMethod;
+use App\Agovena\Payments\Contracts\HandlesProviderRefundEvents;
+use App\Agovena\Payments\Contracts\ManagesProviderSubscriptions;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\PaymentGateway;
 use App\Agovena\Payments\Contracts\ResolvesWebhookAttempts;
@@ -16,16 +19,19 @@ use App\Agovena\Payments\HealthResult;
 use App\Agovena\Payments\PaymentGatewayCapabilities;
 use App\Agovena\Payments\PaymentInitiation;
 use App\Agovena\Payments\PaymentInitiationResult;
+use App\Agovena\Payments\ProviderRefundEvent;
+use App\Agovena\Payments\ProviderSubscriptionEvent;
 use App\Agovena\Payments\RefundRequest;
 use App\Agovena\Payments\RefundResult;
 use App\Agovena\Payments\WebhookPayload;
 use App\Enums\PaymentStatus;
+use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway, ResolvesWebhookAttempts, SynchronizesPayments, ValidatesWebhookPayload
+final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, ResolvesWebhookAttempts, SynchronizesPayments, ValidatesWebhookPayload
 {
     public const ID = 'tebex';
 
@@ -35,6 +41,7 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
     public function __construct(
         private readonly ExtensionSettingsRepository $settings,
         private readonly ApplyNormalizedPaymentStatus $applyStatus,
+        private readonly ApplyProviderRefundEvent $applyRefundEvent,
         private readonly ?TebexApi $api = null,
     ) {}
 
@@ -53,7 +60,7 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         return new PaymentGatewayCapabilities(
             refunds: true,
             partialRefunds: false,
-            recurring: false,
+            recurring: true,
             webhooks: true,
             redirect: true,
             statusSync: true,
@@ -70,6 +77,10 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         $api = $this->client();
         if ($api === null) {
             return PaymentInitiationResult::failed(__('tebex::messages.errors.not_configured'));
+        }
+
+        if ($this->renewalModeFor($request->order) === 'automatic' && ! $this->supportsRecurringOrder($request->order)) {
+            return PaymentInitiationResult::failed(__('tebex::messages.errors.subscription_checkout_unsupported'));
         }
 
         $packageMap = $this->packageMap();
@@ -178,10 +189,12 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
 
         $subject = is_array($event['subject'] ?? null) ? $event['subject'] : [];
         $type = (string) ($event['type'] ?? '');
-        $externalId = (string) ($subject['transaction_id'] ?? '');
-        $status = $type !== ''
-            ? TebexStatusMapper::fromWebhook($type)
-            : TebexStatusMapper::fromPaymentStatusId($subject['status']['id'] ?? null);
+        $paymentSubject = $this->recurringPaymentSubject($subject, $type);
+        $externalId = (string) ($subject['transaction_id'] ?? $paymentSubject['transaction_id'] ?? '');
+        $statusId = is_scalar($subject['status']['id'] ?? null) ? $subject['status']['id'] : null;
+        $status = $type === 'payment.refunded' && $statusId !== null
+            ? TebexStatusMapper::fromPaymentStatusId($statusId)
+            : ($type !== '' ? TebexStatusMapper::fromWebhook($type) : TebexStatusMapper::fromPaymentStatusId($statusId));
 
         return new WebhookPayload(
             externalEventId: (string) $event['id'],
@@ -193,6 +206,12 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
                 'price_paid' => $subject['price_paid'] ?? null,
                 'products' => $subject['products'] ?? [],
                 'custom' => $subject['custom'] ?? ($subject['custom_data'] ?? null),
+                'recurring_payment_reference' => $subject['recurring_payment_reference'] ?? $subject['reference'] ?? null,
+                'status_id' => $statusId,
+                'status_description' => $subject['status']['description'] ?? null,
+                'next_payment_at' => $subject['next_payment_at'] ?? null,
+                'created_at' => $subject['created_at'] ?? null,
+                'payment_sequence' => $subject['payment_sequence'] ?? null,
             ],
         );
     }
@@ -214,6 +233,11 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
 
     public function validateWebhookPayload(PaymentAttempt $attempt, WebhookPayload $payload): bool
     {
+        $recurringReference = $payload->raw['recurring_payment_reference'] ?? null;
+        if (is_string($recurringReference) && str_starts_with($recurringReference, 'tbx-r-')) {
+            $this->rememberProviderSubscription($attempt, $recurringReference);
+        }
+
         if ($payload->status !== PaymentStatus::Paid) {
             return true;
         }
@@ -253,6 +277,99 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         sort($actual);
 
         return $expected === $actual;
+    }
+
+    public function managesProviderSubscriptions(): bool
+    {
+        return true;
+    }
+
+    public function cancelProviderSubscription(string $externalId, bool $atPeriodEnd): void
+    {
+        $api = $this->client();
+        if ($api === null || ! str_starts_with($externalId, 'tbx-r-')) {
+            throw TebexProviderException::failed('tebex::messages.errors.subscription_action_failed');
+        }
+
+        try {
+            // Tebex exposes one cancellation operation. The resulting webhook
+            // is authoritative for whether the cancellation is immediate or
+            // scheduled at the end of the current billing period.
+            $api->cancelRecurringPayment($externalId);
+        } catch (TebexProviderException $exception) {
+            throw $exception;
+        }
+    }
+
+    public function resumeProviderSubscription(string $externalId): void
+    {
+        $api = $this->client();
+        if ($api === null || ! str_starts_with($externalId, 'tbx-r-')) {
+            throw TebexProviderException::failed('tebex::messages.errors.subscription_action_failed');
+        }
+
+        $api->updateRecurringPaymentStatus($externalId, 'Active');
+    }
+
+    public function providerSubscriptionEvent(WebhookPayload $payload): ?ProviderSubscriptionEvent
+    {
+        $type = (string) ($payload->raw['type'] ?? '');
+        $reference = (string) ($payload->raw['recurring_payment_reference'] ?? '');
+        if (! str_starts_with($reference, 'tbx-r-')) {
+            return null;
+        }
+
+        [$eventType, $status, $cancelAtPeriodEnd] = match ($type) {
+            'recurring-payment.started' => ['subscription.started', 'active', false],
+            'recurring-payment.renewed' => ['subscription.renewed', 'active', false],
+            'recurring-payment.cancellation.requested' => ['subscription.cancellation_requested', 'active', true],
+            'recurring-payment.cancellation.aborted' => ['subscription.cancellation_aborted', 'active', false],
+            'recurring-payment.ended' => ['subscription.canceled', 'canceled', false],
+            default => [null, null, null],
+        };
+        if ($eventType === null || $status === null) {
+            return null;
+        }
+
+        $custom = is_array($payload->raw['custom'] ?? null) ? $payload->raw['custom'] : [];
+        $nextPaymentAt = $payload->raw['next_payment_at'] ?? null;
+
+        return new ProviderSubscriptionEvent(
+            gatewayId: self::ID,
+            externalSubscriptionId: $reference,
+            eventType: $eventType,
+            status: $status,
+            transactionId: is_string($payload->raw['transaction_id'] ?? null) && $payload->raw['transaction_id'] !== ''
+                ? $payload->raw['transaction_id']
+                : null,
+            originOrderId: is_scalar($custom['order_id'] ?? null) ? (string) $custom['order_id'] : null,
+            periodStart: is_string($payload->raw['created_at'] ?? null) ? $payload->raw['created_at'] : null,
+            nextBillingAt: is_string($nextPaymentAt) ? $nextPaymentAt : null,
+            cancelAtPeriodEnd: $cancelAtPeriodEnd,
+            customData: $custom,
+        );
+    }
+
+    public function providerRefundEvent(WebhookPayload $payload): ?ProviderRefundEvent
+    {
+        if (($payload->raw['type'] ?? null) !== 'payment.refunded'
+            || ! is_string($payload->raw['transaction_id'] ?? null)
+            || $payload->raw['transaction_id'] === '') {
+            return null;
+        }
+
+        $status = match ((int) ($payload->raw['status_id'] ?? 2)) {
+            21 => 'pending',
+            2 => 'approved',
+            default => 'rejected',
+        };
+
+        return new ProviderRefundEvent(
+            gatewayId: self::ID,
+            externalRefundId: $payload->externalEventId,
+            transactionId: $payload->raw['transaction_id'],
+            status: $status,
+        );
     }
 
     private static function minorUnits(mixed $amount): ?int
@@ -299,13 +416,26 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
             return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok(trim($externalRefundId));
+        $providerStatus = match ((int) ($refund['status']['id'] ?? 2)) {
+            2 => 'approved',
+            21 => 'pending',
+            18 => 'rejected',
+            default => 'unknown',
+        };
+        if ($providerStatus === 'rejected') {
+            return RefundResult::fail(__('tebex::messages.errors.refund_failed'), terminalFailure: true);
+        }
+        if ($providerStatus === 'unknown') {
+            return RefundResult::unknown(['provider_status' => (string) ($refund['status']['id'] ?? 'unknown')]);
+        }
+
+        return RefundResult::ok(trim($externalRefundId), ['provider_status' => $providerStatus]);
     }
 
     public function syncStatus(Payment $payment): Payment
     {
         $api = $this->client();
-        $attempt = $this->latestExternalAttempt($payment);
+        $attempt = $this->latestTransactionAttempt($payment);
         if ($api === null || $attempt?->external_id === null) {
             return $payment;
         }
@@ -313,6 +443,14 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         try {
             $remote = $api->getPayment($attempt->external_id);
             $status = TebexStatusMapper::fromPaymentStatusId($remote['status']['id'] ?? null);
+            if ($status === PaymentStatus::Refunded || $status === PaymentStatus::Pending) {
+                $this->applyRefundEvent->handle(new ProviderRefundEvent(
+                    gatewayId: self::ID,
+                    externalRefundId: $attempt->external_id,
+                    transactionId: $attempt->external_id,
+                    status: $status === PaymentStatus::Refunded ? 'approved' : 'pending',
+                ));
+            }
             $this->applyStatus->handle($attempt, $status);
         } catch (TebexProviderException) {
             Log::warning('payment.sync.failed', ['gateway_id' => self::ID, 'payment_id' => $payment->id]);
@@ -357,6 +495,70 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
         $secret = $this->secretKey();
 
         return $projectId !== null && $secret !== null ? new HttpTebexApi($projectId, $secret) : null;
+    }
+
+    /** @return array<string, mixed> */
+    private function recurringPaymentSubject(array $subject, string $type): array
+    {
+        if (! str_starts_with($type, 'recurring-payment.')) {
+            return [];
+        }
+
+        foreach (['last_payment', 'initial_payment'] as $key) {
+            if (is_array($subject[$key] ?? null)) {
+                return $subject[$key];
+            }
+        }
+
+        return [];
+    }
+
+    private function supportsRecurringOrder(Order $order): bool
+    {
+        if ($order->items->count() !== 1) {
+            return false;
+        }
+
+        $item = $order->items->first();
+        if ($item === null || (int) $item->quantity !== 1) {
+            return false;
+        }
+
+        $item->loadMissing('product.capabilities');
+
+        return $item->product?->capability('subscribable') !== null;
+    }
+
+    private function renewalModeFor(Order $order): ?string
+    {
+        $properties = $order->custom_properties_snapshot;
+        if (! is_array($properties)) {
+            return null;
+        }
+
+        $mode = $properties['_agovena_renewal_mode'] ?? null;
+        if ($mode === null) {
+            foreach ($properties as $property) {
+                if (is_array($property) && ($property['key'] ?? null) === '_agovena_renewal_mode') {
+                    $mode = $property['value'] ?? null;
+                    break;
+                }
+            }
+        }
+
+        return in_array($mode, ['manual', 'automatic'], true) ? (string) $mode : null;
+    }
+
+    private function rememberProviderSubscription(PaymentAttempt $attempt, string $subscriptionId): void
+    {
+        $meta = is_array($attempt->response_meta) ? $attempt->response_meta : [];
+        if (($meta['provider_subscription_id'] ?? null) === $subscriptionId) {
+            return;
+        }
+
+        $meta['provider_subscription_id'] = $subscriptionId;
+        $attempt->response_meta = $meta;
+        $attempt->save();
     }
 
     /** @return array<string, string> */
@@ -427,6 +629,16 @@ final class TebexPaymentGateway implements OffersCheckoutMethods, PaymentGateway
             ->where('payment_id', $payment->id)
             ->where('gateway_id', self::ID)
             ->whereNotNull('external_id')
+            ->latest('id')
+            ->first();
+    }
+
+    private function latestTransactionAttempt(Payment $payment): ?PaymentAttempt
+    {
+        return PaymentAttempt::query()
+            ->where('payment_id', $payment->id)
+            ->where('gateway_id', self::ID)
+            ->where('external_id', 'like', 'tbx-%')
             ->latest('id')
             ->first();
     }

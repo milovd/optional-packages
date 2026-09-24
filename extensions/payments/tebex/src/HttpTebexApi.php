@@ -41,6 +41,26 @@ final class HttpTebexApi implements TebexApi, TebexConnectionChecker
         return $this->request('get', '/payments/'.rawurlencode($transactionId).'?type=txn_id');
     }
 
+    public function getRecurringPayment(string $reference): array
+    {
+        return $this->request('get', '/recurring-payments/'.rawurlencode($reference));
+    }
+
+    public function cancelRecurringPayment(string $reference): array
+    {
+        return $this->request('delete', '/recurring-payments/'.rawurlencode($reference));
+    }
+
+    public function updateRecurringPaymentStatus(string $reference, string $status, ?string $pausedUntil = null): array
+    {
+        $payload = ['status' => $status];
+        if ($pausedUntil !== null) {
+            $payload['paused_until'] = $pausedUntil;
+        }
+
+        return $this->request('put', '/recurring-payments/'.rawurlencode($reference).'/status', $payload);
+    }
+
     public function ping(): void
     {
         try {
@@ -88,9 +108,16 @@ final class HttpTebexApi implements TebexApi, TebexConnectionChecker
             if (is_string($idempotencyKey) && $idempotencyKey !== '') {
                 $request = $request->withHeaders(['Idempotency-Key' => $idempotencyKey]);
             }
-            $response = $method === 'get'
-                ? $request->get(self::BASE_URL.$path)
-                : ($payload === null ? $request->post(self::BASE_URL.$path) : $request->post(self::BASE_URL.$path, $payload));
+            $response = match ($method) {
+                'get' => $request->get(self::BASE_URL.$path),
+                'delete' => $request->delete(self::BASE_URL.$path),
+                'put' => $payload === null
+                    ? $request->put(self::BASE_URL.$path)
+                    : $request->put(self::BASE_URL.$path, $payload),
+                default => $payload === null
+                    ? $request->post(self::BASE_URL.$path)
+                    : $request->post(self::BASE_URL.$path, $payload),
+            };
             $response->throw();
             $data = $response->json();
         } catch (ConnectionException) {

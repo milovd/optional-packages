@@ -16,6 +16,8 @@ return [
         'not_configured' => 'Tebex is not configured.',
         'package_mapping_missing' => 'A Tebex package mapping is missing for this product.',
         'create_failed' => 'Tebex checkout could not be created.',
+        'subscription_checkout_unsupported' => 'Tebex subscriptions require exactly one mapped subscription package with quantity one.',
+        'subscription_action_failed' => 'The Tebex subscription action could not be completed.',
         'request_failed' => 'Tebex request failed.',
         'invalid_response' => 'Tebex returned an invalid response.',
         'webhook_invalid' => 'The Tebex webhook is invalid.',

@@ -23,9 +23,10 @@ final class TebexStatusMapper
     {
         return match ((int) $id) {
             1 => PaymentStatus::Paid,
-            2, 21 => PaymentStatus::Refunded,
+            2 => PaymentStatus::Refunded,
             3 => PaymentStatus::Cancelled,
             18 => PaymentStatus::Failed,
+            21 => PaymentStatus::Pending,
             default => PaymentStatus::Pending,
         };
     }

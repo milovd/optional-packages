@@ -16,6 +16,8 @@ return [
         'not_configured' => 'Tebex is niet geconfigureerd.',
         'package_mapping_missing' => 'Voor dit product ontbreekt een Tebex-packagemapping.',
         'create_failed' => 'Tebex-checkout kon niet worden aangemaakt.',
+        'subscription_checkout_unsupported' => 'Tebex-subscriptions vereisen exact één gekoppeld subscription package met quantity één.',
+        'subscription_action_failed' => 'De Tebex-subscriptionactie kon niet worden uitgevoerd.',
         'request_failed' => 'Tebex-request mislukt.',
         'invalid_response' => 'Tebex gaf een ongeldige response terug.',
         'webhook_invalid' => 'De Tebex-webhook is ongeldig.',

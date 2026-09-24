@@ -7,6 +7,7 @@ namespace Agovena\Extensions\Tebex;
 use App\Agovena\Extensions\Contracts\Extension;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
+use App\Agovena\Payments\ApplyProviderRefundEvent;
 use Illuminate\Support\ServiceProvider;
 
 final class TebexServiceProvider extends ServiceProvider
@@ -18,6 +19,7 @@ final class TebexServiceProvider extends ServiceProvider
             return new TebexPaymentGateway(
                 $app->make(ExtensionSettingsRepository::class),
                 $app->make(ApplyNormalizedPaymentStatus::class),
+                $app->make(ApplyProviderRefundEvent::class),
                 $app->bound(TebexApi::class) ? $app->make(TebexApi::class) : null,
             );
         });
