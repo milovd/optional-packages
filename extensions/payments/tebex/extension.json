@@ -5,7 +5,7 @@
     "description": "First-party Tebex Checkout gateway for game-commerce packages, signed webhooks, provider-managed recurring payments, and full refunds.",
     "author": "Agovena",
     "category": "payment_gateway",
-    "production_ready": false,
+    "production_ready": true,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\Tebex\\TebexServiceProvider",
     "dependencies": [],
