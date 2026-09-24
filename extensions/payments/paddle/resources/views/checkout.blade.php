@@ -1,15 +1,12 @@
-<div class="store-confirmation">
-    <h1 class="store-title">{{ __('paddle::messages.checkout.title') }}</h1>
-
+<div class="store-provider-checkout store-provider-checkout--paddle">
     @if ($clientToken === null)
-        <p class="store-note" role="alert">{{ __('paddle::messages.checkout.missing_client_token') }}</p>
+        <p class="store-provider-checkout__message store-note" role="alert">{{ __('paddle::messages.checkout.missing_client_token') }}</p>
     @elseif ($transactionId === null)
-        <p class="store-note" role="alert">{{ __('paddle::messages.checkout.missing_transaction') }}</p>
+        <p class="store-provider-checkout__message store-note" role="alert">{{ __('paddle::messages.checkout.missing_transaction') }}</p>
     @else
-        <p class="store-note" role="status">{{ __('paddle::messages.checkout.loading') }}</p>
-        <div class="paddle-checkout-frame" aria-live="polite"></div>
+        <div class="paddle-checkout-frame store-provider-checkout__frame" role="region" aria-label="{{ __('paddle::messages.checkout.aria_label') }}" aria-live="polite"></div>
         <noscript>
-            <p class="store-note" role="alert">{{ __('paddle::messages.checkout.javascript_required') }}</p>
+            <p class="store-provider-checkout__message store-note" role="alert">{{ __('paddle::messages.checkout.javascript_required') }}</p>
         </noscript>
         @push('scripts')
             <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
@@ -21,12 +18,16 @@
 
                     const returnUrl = @json($returnUrl);
                     const allowedPaymentMethods = @json($allowedPaymentMethods);
+                    const checkoutTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                    const checkoutLocale = @json($locale);
                     const checkoutSettings = {
                         displayMode: 'inline',
                         frameTarget: 'paddle-checkout-frame',
                         frameInitialHeight: '650',
-                        frameStyle: 'width: 100%; min-width: 312px; border: 0;',
+                        frameStyle: 'display: block; width: 100%; min-width: 312px; border: 0; background-color: transparent;',
                         variant: 'one-page',
+                        theme: checkoutTheme,
+                        locale: checkoutLocale,
                         allowLogout: false,
                         allowDiscountRemoval: false,
                         showAddDiscounts: false,
@@ -41,11 +42,14 @@
                         checkoutSettings.successUrl = returnUrl;
                     }
 
+                    let returnedToStatus = false;
+
                     const returnToStatus = function (eventName) {
-                        if (returnUrl === null) {
+                        if (returnUrl === null || returnedToStatus) {
                             return;
                         }
 
+                        returnedToStatus = true;
                         const target = new URL(returnUrl, window.location.origin);
                         if (eventName !== 'completed') {
                             target.searchParams.set('checkout_event', eventName);
@@ -62,11 +66,17 @@
                                     returnToStatus('completed');
                                 }, 250);
                             }
-                            if (event.name === 'checkout.payment.failed') {
-                                returnToStatus('failed');
-                            }
-                            if (event.name === 'checkout.closed') {
-                                returnToStatus('cancelled');
+                            switch (event.name) {
+                                case 'checkout.payment.failed':
+                                    returnToStatus('failed');
+                                    break;
+                                case 'checkout.payment.error':
+                                case 'checkout.error':
+                                    returnToStatus('error');
+                                    break;
+                                case 'checkout.closed':
+                                    returnToStatus('cancelled');
+                                    break;
                             }
                         },
                     });

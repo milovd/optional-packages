@@ -31,7 +31,12 @@ final class HttpPaddleApi implements PaddleApi, PaddleConnectionChecker
 
     public function getTransaction(string $transactionId): array
     {
-        return $this->request('get', '/transactions/'.rawurlencode($transactionId));
+        return $this->request('get', '/transactions/'.rawurlencode($transactionId).'?include=adjustments,adjustments_totals,available_payment_methods');
+    }
+
+    public function updateTransaction(string $transactionId, array $payload): array
+    {
+        return $this->request('patch', '/transactions/'.rawurlencode($transactionId), $payload);
     }
 
     public function getSubscription(string $subscriptionId): array

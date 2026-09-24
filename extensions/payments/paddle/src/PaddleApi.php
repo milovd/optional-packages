@@ -15,6 +15,9 @@ interface PaddleApi
     /** @return array<string, mixed> */
     public function getTransaction(string $transactionId): array;
 
+    /** @param array<string, mixed> $payload */
+    public function updateTransaction(string $transactionId, array $payload): array;
+
     /** @return array<string, mixed> */
     public function getSubscription(string $subscriptionId): array;
 

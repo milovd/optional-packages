@@ -30,7 +30,11 @@ final class PaddleCheckoutPage extends Component
         $this->clientToken = $gateway->clientSideToken();
         $this->sandbox = $gateway->isSandbox();
         $this->transactionId = $this->validTransactionId($request->query('_ptxn'));
-        $this->requestedPaymentMethod = $this->validPaymentMethod($request->query('allowed_payment_methods'));
+        $rawRequestedPaymentMethod = $request->query('allowed_payment_methods');
+        if ($rawRequestedPaymentMethod !== null && $this->validPaymentMethod($rawRequestedPaymentMethod) === null) {
+            abort(404);
+        }
+        $this->requestedPaymentMethod = $this->validPaymentMethod($rawRequestedPaymentMethod);
 
         if ($this->transactionId === null) {
             return;
@@ -47,9 +51,17 @@ final class PaddleCheckoutPage extends Component
             return;
         }
 
+        $access->authorize($request, $order);
+        $persistedPaymentMethod = $this->persistedPaymentMethod($attempt);
+        if ($persistedPaymentMethod !== null) {
+            if ($this->requestedPaymentMethod !== null && $this->requestedPaymentMethod !== $persistedPaymentMethod) {
+                abort(404);
+            }
+            $this->requestedPaymentMethod = $persistedPaymentMethod;
+        }
         $this->returnUrl = $access->paymentStatusUrl($order);
 
-        if ($order->payment?->status === PaymentStatus::Paid && $access->allows($request, $order)) {
+        if ($order->payment?->status === PaymentStatus::Paid) {
             throw new HttpResponseException(new RedirectResponse($access->confirmationUrl($order)));
         }
     }
@@ -64,6 +76,7 @@ final class PaddleCheckoutPage extends Component
             'sandbox' => $this->sandbox,
             'transactionId' => $this->transactionId,
             'returnUrl' => $this->returnUrl,
+            'locale' => in_array(app()->getLocale(), ['en', 'nl'], true) ? app()->getLocale() : 'en',
             'allowedPaymentMethods' => $this->requestedPaymentMethod === null
                 ? []
                 : [$this->requestedPaymentMethod],
@@ -89,5 +102,19 @@ final class PaddleCheckoutPage extends Component
         }
 
         return $value;
+    }
+
+    private function persistedPaymentMethod(PaymentAttempt $attempt): ?string
+    {
+        $metadata = is_array($attempt->request_meta) ? $attempt->request_meta : [];
+        $method = $metadata['checkout_method'] ?? $attempt->order?->payment?->method;
+        if (! is_string($method) || $method === '' || $method === PaddlePaymentGateway::ID) {
+            return null;
+        }
+
+        $prefix = PaddlePaymentGateway::ID.':';
+        $method = str_starts_with($method, $prefix) ? substr($method, strlen($prefix)) : $method;
+
+        return $this->validPaymentMethod($method);
     }
 }

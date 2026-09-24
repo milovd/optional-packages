@@ -6,6 +6,7 @@ namespace Agovena\Extensions\Paddle;
 
 use App\Agovena\Extensions\Contracts\Extension;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
+use App\Agovena\Payments\ApplyProviderRefundEvent;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -19,6 +20,7 @@ final class PaddleServiceProvider extends ServiceProvider
             return new PaddlePaymentGateway(
                 $app->make(ExtensionSettingsRepository::class),
                 $app->make(ApplyNormalizedPaymentStatus::class),
+                $app->make(ApplyProviderRefundEvent::class),
                 $app->bound(PaddleApi::class) ? $app->make(PaddleApi::class) : null,
             );
         });

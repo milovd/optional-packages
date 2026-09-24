@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Agovena\Extensions\Paddle;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
+use App\Agovena\Payments\ApplyProviderRefundEvent;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
+use App\Agovena\Payments\Contracts\CancelsPayments;
 use App\Agovena\Payments\Contracts\ConfiguresCheckoutMethods;
 use App\Agovena\Payments\Contracts\HandlesProviderRefundEvents;
 use App\Agovena\Payments\Contracts\ManagesProviderSubscriptions;
@@ -30,8 +32,9 @@ use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
-final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, RefreshesCheckoutMethods, SynchronizesPayments, ValidatesWebhookPayload
+final class PaddlePaymentGateway implements CancelsPayments, ConfiguresCheckoutMethods, HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, RefreshesCheckoutMethods, SynchronizesPayments, ValidatesWebhookPayload
 {
     public const ID = 'paddle';
 
@@ -77,6 +80,7 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
     public function __construct(
         private readonly ExtensionSettingsRepository $settings,
         private readonly ApplyNormalizedPaymentStatus $applyStatus,
+        private readonly ApplyProviderRefundEvent $applyRefundEvent,
         private readonly ?PaddleApi $api = null,
     ) {}
 
@@ -99,6 +103,7 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
             webhooks: true,
             redirect: true,
             statusSync: true,
+            cancelPending: true,
         );
     }
 
@@ -362,6 +367,51 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
         $api->clearScheduledSubscriptionChange($externalId);
     }
 
+    public function cancel(Payment $payment, ?PaymentAttempt $attempt = null): Payment
+    {
+        $api = $this->client();
+        if ($api === null) {
+            throw ValidationException::withMessages([
+                'payment' => __('paddle::messages.errors.not_configured'),
+            ]);
+        }
+
+        $attempt ??= $this->latestExternalAttempt($payment);
+        if ($attempt?->external_id === null) {
+            throw ValidationException::withMessages([
+                'payment' => __('paddle::messages.errors.cancel_unsupported'),
+            ]);
+        }
+
+        try {
+            $remote = $api->getTransaction($attempt->external_id);
+            $status = strtolower((string) ($remote['status'] ?? ''));
+            if (! in_array($status, ['draft', 'ready', 'billed'], true)) {
+                throw ValidationException::withMessages([
+                    'payment' => __('paddle::messages.errors.cancel_unsupported'),
+                ]);
+            }
+
+            $remote = $api->updateTransaction($attempt->external_id, ['status' => 'canceled']);
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (PaddleProviderException) {
+            throw ValidationException::withMessages([
+                'payment' => __('paddle::messages.errors.cancel_unsupported'),
+            ]);
+        }
+
+        if (strtolower((string) ($remote['status'] ?? '')) !== 'canceled') {
+            throw ValidationException::withMessages([
+                'payment' => __('paddle::messages.errors.cancel_unsupported'),
+            ]);
+        }
+
+        $this->applyStatus->handle($attempt, PaymentStatus::Cancelled);
+
+        return $payment->fresh() ?? $payment;
+    }
+
     public function providerSubscriptionEvent(WebhookPayload $payload): ?ProviderSubscriptionEvent
     {
         $raw = $payload->raw;
@@ -572,9 +622,18 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
             return RefundResult::fail(__('paddle::messages.errors.refund_failed'));
         }
 
-        return RefundResult::ok($externalRefundId, [
-            'provider_status' => (string) ($adjustment['status'] ?? 'pending_approval'),
-        ]);
+        $providerStatus = strtolower((string) ($adjustment['status'] ?? 'pending_approval'));
+        if (in_array($providerStatus, ['rejected', 'reversed', 'canceled', 'cancelled'], true)) {
+            return RefundResult::fail(__('paddle::messages.errors.refund_failed'), terminalFailure: true);
+        }
+        if (! in_array($providerStatus, ['approved', 'completed', 'pending', 'pending_approval', 'processing'], true)) {
+            return RefundResult::unknown(
+                ['provider_status' => $providerStatus],
+                __('paddle::messages.errors.unknown_outcome'),
+            );
+        }
+
+        return RefundResult::ok($externalRefundId, ['provider_status' => $providerStatus]);
     }
 
     public function syncStatus(Payment $payment): Payment
@@ -590,6 +649,21 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
             $subscriptionId = $transaction['subscription_id'] ?? null;
             if (is_string($subscriptionId) && trim($subscriptionId) !== '') {
                 $this->rememberProviderSubscription($attempt, trim($subscriptionId));
+            }
+            foreach ((array) ($transaction['adjustments'] ?? []) as $adjustment) {
+                if (! is_array($adjustment)
+                    || ! is_string($adjustment['id'] ?? null)
+                    || ! str_starts_with($adjustment['id'], 'adj_')
+                ) {
+                    continue;
+                }
+
+                $this->applyRefundEvent->handle(new ProviderRefundEvent(
+                    gatewayId: self::ID,
+                    externalRefundId: $adjustment['id'],
+                    transactionId: $attempt->external_id,
+                    status: (string) ($adjustment['status'] ?? ''),
+                ));
             }
             $this->applyStatus->handle($attempt, PaddleStatusMapper::map((string) ($transaction['status'] ?? '')));
         } catch (PaddleProviderException) {
@@ -614,6 +688,11 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
             return HealthResult::fail(__('paddle::messages.health.client_token_mode_mismatch'));
         }
 
+        $webhookUrl = route('webhooks.payments', ['gateway' => self::ID], true);
+        if (! $this->sandbox() && ! str_starts_with(strtolower($webhookUrl), 'https://')) {
+            return HealthResult::fail(__('paddle::messages.health.webhook_https_required'));
+        }
+
         $api = $this->client();
         if ($api === null) {
             return HealthResult::fail(__('paddle::messages.health.missing_key'));
@@ -630,7 +709,7 @@ final class PaddlePaymentGateway implements ConfiguresCheckoutMethods, HandlesPr
         $mode = $this->sandbox() ? 'sandbox' : 'live';
         return HealthResult::ok(__('paddle::messages.health.ok', [
             'mode' => $mode,
-            'webhook' => route('webhooks.payments', ['gateway' => self::ID], true),
+            'webhook' => $webhookUrl,
         ]));
     }
 

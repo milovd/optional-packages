@@ -26,6 +26,7 @@ return [
         'invalid_response' => 'Paddle gaf een ongeldige response terug.',
         'webhook_invalid' => 'De Paddle-webhook is ongeldig.',
         'refund_failed' => 'De Paddle-refund kon niet worden aangemaakt.',
+        'cancel_unsupported' => 'Deze Paddle-transactie kan niet bij de provider worden geannuleerd.',
         'recurring_items_unsupported' => 'Automatische Paddle-subscriptions vereisen één subscribable orderitem.',
     ],
     'methods' => [
@@ -49,13 +50,15 @@ return [
     'health' => [
         'missing_key' => 'Paddle API-sleutel ontbreekt.',
         'missing_client_token' => 'Paddle client-side token ontbreekt.',
-        'missing_webhook' => 'Paddle webhookgeheim ontbreekt.',
-        'client_token_mode_mismatch' => 'Het Paddle client-side token past niet bij de gekozen Sandbox- of livemode.',
+        'missing_webhook' => 'Het Paddle-webhooksecret ontbreekt.',
+        'client_token_mode_mismatch' => 'De Paddle client-side token past niet bij de geselecteerde Sandbox- of livemodus.',
+        'webhook_https_required' => 'Paddle live mode vereist een publiek bereikbare HTTPS-webhook-URL.',
         'ok' => 'Paddle is geconfigureerd voor :mode. Webhook: :webhook',
     ],
     'checkout' => [
         'title' => 'Paddle checkout',
         'loading' => 'De beveiligde Paddle-checkout wordt geladen.',
+        'aria_label' => 'Beveiligde Paddle-betaalcheckout',
         'missing_client_token' => 'Paddle-checkout is niet geconfigureerd. Voeg het client-side token toe via Admin > Extensions > Paddle.',
         'missing_transaction' => 'Deze Paddle-checkoutlink bevat geen transaction. Start de betaling opnieuw vanuit de bestelling.',
         'javascript_required' => 'JavaScript is vereist om de beveiligde Paddle-checkout te openen.',

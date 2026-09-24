@@ -26,6 +26,7 @@ return [
         'invalid_response' => 'Paddle returned an invalid response.',
         'webhook_invalid' => 'The Paddle webhook is invalid.',
         'refund_failed' => 'Paddle refund could not be created.',
+        'cancel_unsupported' => 'This Paddle transaction cannot be cancelled at the provider.',
         'recurring_items_unsupported' => 'Paddle automatic subscriptions require one subscribable order item.',
     ],
     'methods' => [
@@ -51,11 +52,13 @@ return [
         'missing_client_token' => 'Paddle client-side token is missing.',
         'missing_webhook' => 'Paddle webhook secret is missing.',
         'client_token_mode_mismatch' => 'The Paddle client-side token does not match the selected Sandbox or live mode.',
+        'webhook_https_required' => 'Paddle live mode requires a publicly reachable HTTPS webhook URL.',
         'ok' => 'Paddle is configured for :mode. Webhook: :webhook',
     ],
     'checkout' => [
         'title' => 'Paddle checkout',
         'loading' => 'Loading the secure Paddle checkout.',
+        'aria_label' => 'Secure Paddle payment checkout',
         'missing_client_token' => 'Paddle checkout is not configured. Add the client-side token in Admin > Extensions > Paddle.',
         'missing_transaction' => 'This Paddle checkout link is missing its transaction. Start the payment again from the order.',
         'javascript_required' => 'JavaScript is required to open the secure Paddle checkout.',
