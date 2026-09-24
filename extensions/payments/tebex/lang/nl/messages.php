@@ -17,6 +17,7 @@ return [
     'errors' => [
         'not_configured' => 'Tebex is niet geconfigureerd.',
         'create_failed' => 'Tebex-checkout kon niet worden aangemaakt.',
+        'checkout_amount_unsupported' => 'Dit ordertotaal kan niet veilig in Tebex Checkout worden weergegeven.',
         'subscription_checkout_unsupported' => 'Tebex-subscriptions vereisen exact één subscription-item met quantity één.',
         'subscription_interval_unsupported' => 'Dit subscription-interval wordt niet ondersteund door Tebex Checkout.',
         'subscription_action_failed' => 'De Tebex-subscriptionactie kon niet worden uitgevoerd.',

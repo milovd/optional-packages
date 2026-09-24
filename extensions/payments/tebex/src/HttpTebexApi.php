@@ -24,6 +24,11 @@ final class HttpTebexApi implements TebexApi, TebexConnectionChecker
     }
 
 
+    public function getBasket(string $ident): array
+    {
+        return $this->request('get', '/baskets/'.rawurlencode($ident));
+    }
+
     public function getPayment(string $transactionId): array
     {
         return $this->request('get', '/payments/'.rawurlencode($transactionId).'?type=txn_id');

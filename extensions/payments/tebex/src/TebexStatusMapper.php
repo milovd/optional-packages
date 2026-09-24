@@ -13,8 +13,9 @@ final class TebexStatusMapper
         return match (strtolower(trim($type))) {
             'payment.completed', 'recurring-payment.started', 'recurring-payment.renewed' => PaymentStatus::Paid,
             'payment.refunded' => PaymentStatus::Refunded,
-            'payment.declined', 'payment.dispute.lost' => PaymentStatus::Failed,
-            'recurring-payment.ended', 'payment.dispute.closed' => PaymentStatus::Cancelled,
+            'payment.declined' => PaymentStatus::Failed,
+            'payment.dispute.lost', 'payment.dispute.closed' => PaymentStatus::Pending,
+            'recurring-payment.ended' => PaymentStatus::Cancelled,
             default => PaymentStatus::Pending,
         };
     }
@@ -24,7 +25,7 @@ final class TebexStatusMapper
         return match ((int) $id) {
             1 => PaymentStatus::Paid,
             2 => PaymentStatus::Refunded,
-            3 => PaymentStatus::Refunded,
+            3 => PaymentStatus::Pending,
             18 => PaymentStatus::Failed,
             19, 21 => PaymentStatus::Pending,
             default => PaymentStatus::Pending,

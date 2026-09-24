@@ -10,6 +10,7 @@ use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\ApplyProviderRefundEvent;
 use App\Agovena\Payments\CheckoutPaymentMethod;
 use App\Agovena\Payments\Contracts\HandlesProviderRefundEvents;
+use App\Agovena\Payments\Contracts\HandlesWebhookValidation;
 use App\Agovena\Payments\Contracts\ManagesProviderSubscriptions;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
 use App\Agovena\Payments\Contracts\PaymentGateway;
@@ -31,8 +32,9 @@ use App\Models\Payment;
 use App\Models\PaymentAttempt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
-final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, ResolvesWebhookAttempts, SynchronizesPayments, ValidatesWebhookPayload
+final class TebexPaymentGateway implements HandlesProviderRefundEvents, HandlesWebhookValidation, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, ResolvesWebhookAttempts, SynchronizesPayments, ValidatesWebhookPayload
 {
     public const ID = 'tebex';
 
@@ -87,6 +89,10 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
 
         if ($this->renewalModeFor($request->order) === 'automatic' && ! $this->supportsRecurringOrder($request->order)) {
             return PaymentInitiationResult::failed(__('tebex::messages.errors.subscription_checkout_unsupported'));
+        }
+
+        if (! $this->checkoutTotalMatchesPayment($request->order, $request->payment)) {
+            return PaymentInitiationResult::failed(__('tebex::messages.errors.checkout_amount_unsupported'));
         }
 
         $ident = null;
@@ -160,6 +166,31 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         $this->verifiedEvent = $event;
 
         return true;
+    }
+
+    /**
+     * Tebex validates a webhook endpoint with a signed validation.webhook event.
+     * The response must contain the original Tebex webhook id and nothing else.
+     *
+     * @return array{id: string}|null
+     */
+    public function webhookValidationResponse(Request $request): ?array
+    {
+        $event = json_decode($request->getContent(), true);
+        if (! is_array($event) || ($event['type'] ?? null) !== 'validation.webhook') {
+            return null;
+        }
+
+        if (! $this->verifyWebhook($request)) {
+            throw new AccessDeniedHttpException('Webhook verification failed.');
+        }
+
+        $id = $this->verifiedEvent['id'] ?? null;
+        if (! is_scalar($id) || trim((string) $id) === '') {
+            throw new AccessDeniedHttpException('Webhook validation id is missing.');
+        }
+
+        return ['id' => (string) $id];
     }
 
     public function parseWebhook(Request $request): WebhookPayload
@@ -247,16 +278,56 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             return false;
         }
 
-        $expectedQuantity = $payment->order->items->sum(static fn ($item): int => max(1, (int) $item->quantity));
-        $actualQuantity = 0;
-        foreach ((array) ($payload->raw['products'] ?? []) as $product) {
-            if (! is_array($product) || ! isset($product['quantity']) || ! is_numeric($product['quantity'])) {
+        $expectedItems = [];
+        foreach ($payment->order->items as $item) {
+            $itemId = (string) $item->id;
+            if (isset($expectedItems[$itemId])) {
                 return false;
             }
-            $actualQuantity += max(0, (int) $product['quantity']);
+            $expectedItems[$itemId] = [
+                'product_id' => (string) $item->product_id,
+                'quantity' => max(1, (int) $item->quantity),
+                'currency' => strtoupper((string) $item->currency),
+                'unit_amount' => (int) $item->unit_amount,
+            ];
         }
 
-        return $actualQuantity > 0 && $expectedQuantity === $actualQuantity;
+        $seenItems = [];
+        foreach ((array) ($payload->raw['products'] ?? []) as $product) {
+            if (! is_array($product) || ! is_numeric($product['quantity'] ?? null) || (int) $product['quantity'] < 1) {
+                return false;
+            }
+
+            $productCustom = is_array($product['custom'] ?? null) ? $product['custom'] : [];
+            $itemId = is_scalar($productCustom['agovena_order_item_id'] ?? null)
+                ? (string) $productCustom['agovena_order_item_id']
+                : '';
+            $productId = is_scalar($productCustom['agovena_product_id'] ?? null)
+                ? (string) $productCustom['agovena_product_id']
+                : '';
+            if ($itemId === '' || $productId === '' || ! isset($expectedItems[$itemId]) || isset($seenItems[$itemId])) {
+                return false;
+            }
+
+            $expected = $expectedItems[$itemId];
+            if ($productId !== $expected['product_id'] || (int) $product['quantity'] !== $expected['quantity']) {
+                return false;
+            }
+
+            foreach (['base_price', 'paid_price'] as $priceKey) {
+                if (! isset($product[$priceKey]) || ! is_array($product[$priceKey])) {
+                    continue;
+                }
+                if (strtoupper((string) ($product[$priceKey]['currency'] ?? '')) !== $expected['currency']
+                    || self::minorUnits($product[$priceKey]['amount'] ?? null, $expected['currency']) !== $expected['unit_amount']) {
+                    return false;
+                }
+            }
+
+            $seenItems[$itemId] = true;
+        }
+
+        return count($expectedItems) > 0 && count($expectedItems) === count($seenItems);
     }
 
     public function managesProviderSubscriptions(): bool
@@ -267,14 +338,13 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
     public function cancelProviderSubscription(string $externalId, bool $atPeriodEnd): void
     {
         $api = $this->client();
-        if ($api === null || ! str_starts_with($externalId, 'tbx-r-')) {
+        if ($api === null || ! $atPeriodEnd || ! str_starts_with($externalId, 'tbx-r-')) {
             throw TebexProviderException::failed('tebex::messages.errors.subscription_action_failed');
         }
 
         try {
-            // Tebex exposes one cancellation operation. The resulting webhook
-            // is authoritative for whether the cancellation is immediate or
-            // scheduled at the end of the current billing period.
+            // Tebex exposes period-end cancellation through this operation. The
+            // ended webhook remains authoritative for the local terminal state.
             $api->cancelRecurringPayment($externalId);
         } catch (TebexProviderException $exception) {
             throw $exception;
@@ -341,17 +411,25 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             return null;
         }
 
+        $pricePaid = is_array($payload->raw['price_paid'] ?? null) ? $payload->raw['price_paid'] : [];
+        $currency = strtoupper((string) ($pricePaid['currency'] ?? ''));
+        $amountMinor = $currency !== '' ? self::minorUnits($pricePaid['amount'] ?? null, $currency) : null;
         $status = match ((int) ($payload->raw['status_id'] ?? 0)) {
             21 => 'pending',
             2 => 'approved',
             default => 'unknown',
         };
+        if ($amountMinor === null || $currency === '') {
+            $status = 'unknown';
+        }
 
         return new ProviderRefundEvent(
             gatewayId: self::ID,
             externalRefundId: $payload->externalEventId,
             transactionId: $payload->raw['transaction_id'],
             status: $status,
+            amountMinor: $amountMinor,
+            currency: $currency !== '' ? $currency : null,
         );
     }
 
@@ -383,7 +461,7 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         $api = $this->client();
         $attempt = $this->latestTransactionAttempt($request->payment);
         if ($api === null || $attempt?->external_id === null) {
-            return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
+            return RefundResult::fail(__('tebex::messages.errors.refund_failed'), terminalFailure: true);
         }
 
         try {
@@ -438,27 +516,40 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
     public function syncStatus(Payment $payment): Payment
     {
         $api = $this->client();
-        $attempt = $this->latestTransactionAttempt($payment);
-        if ($api === null || $attempt?->external_id === null) {
+        $attempt = $this->latestPaymentAttempt($payment);
+        if ($api === null || $attempt === null) {
             return $payment;
         }
 
         try {
-            $remote = $api->getPayment($attempt->external_id);
+            $transactionId = $this->resolveTransactionId($attempt, $api);
+            if ($transactionId === null) {
+                return $payment;
+            }
+
+            if ($attempt->external_id !== $transactionId) {
+                $meta = is_array($attempt->response_meta) ? $attempt->response_meta : [];
+                $meta['initial_external_id'] ??= $attempt->external_id;
+                $attempt->external_id = $transactionId;
+                $attempt->response_meta = $meta;
+                $attempt->save();
+            }
+
+            $remote = $api->getPayment($transactionId);
             $status = TebexStatusMapper::fromPaymentStatusId($remote['status']['id'] ?? null);
             $statusId = (int) ($remote['status']['id'] ?? 0);
             if (in_array($statusId, [2, 21], true)) {
                 $refundApplied = $this->applyRefundEvent->handle(new ProviderRefundEvent(
                     gatewayId: self::ID,
-                    externalRefundId: $attempt->external_id,
-                    transactionId: $attempt->external_id,
+                    externalRefundId: $transactionId,
+                    transactionId: $transactionId,
                     status: $statusId === 2 ? 'approved' : 'pending',
                 ));
                 if (! $refundApplied) {
                     Log::warning('payment.sync.refund_unmatched', [
                         'gateway_id' => self::ID,
                         'payment_id' => $payment->id,
-                        'external_payment_id' => $attempt->external_id,
+                        'external_payment_id' => $transactionId,
                         'provider_status_id' => $statusId,
                     ]);
                 }
@@ -528,6 +619,20 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         return [];
     }
 
+    private function checkoutTotalMatchesPayment(Order $order, Payment $payment): bool
+    {
+        $total = 0;
+        foreach ($order->items as $item) {
+            if (strtoupper((string) $item->currency) !== strtoupper((string) $payment->currency)) {
+                return false;
+            }
+
+            $total += (int) $item->unit_amount * max(1, (int) $item->quantity);
+        }
+
+        return $total === (int) $payment->amount;
+    }
+
     /** @return list<array{package: array<string, mixed>, qty: int}> */
     private function checkoutItems(Order $order): array
     {
@@ -592,7 +697,8 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
     {
         $period = strtolower(trim((string) ($config['interval'] ?? '')));
         $length = (int) ($config['interval_count'] ?? 0);
-        if (! in_array($period, ['day', 'month', 'year'], true) || $length < 1) {
+        $trialDays = max(0, (int) ($config['trial_days'] ?? 0));
+        if ($trialDays > 0 || ! in_array($period, ['day', 'month', 'year'], true) || $length < 1) {
             return null;
         }
 
@@ -665,6 +771,38 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             ->where('external_id', 'like', 'tbx-%')
             ->latest('id')
             ->first();
+    }
+
+    private function latestPaymentAttempt(Payment $payment): ?PaymentAttempt
+    {
+        return PaymentAttempt::query()
+            ->where('payment_id', $payment->id)
+            ->where('gateway_id', self::ID)
+            ->latest('id')
+            ->first();
+    }
+
+    private function resolveTransactionId(PaymentAttempt $attempt, TebexApi $api): ?string
+    {
+        if (str_starts_with($attempt->external_id, 'tbx-')) {
+            return $attempt->external_id;
+        }
+
+        try {
+            $basket = $api->getBasket($attempt->external_id);
+        } catch (TebexProviderException) {
+            return null;
+        }
+
+        $paymentLink = $basket['links']['payment'] ?? null;
+        if (! is_string($paymentLink) || trim($paymentLink) === '') {
+            return null;
+        }
+
+        $path = parse_url($paymentLink, PHP_URL_PATH);
+        $transactionId = is_string($path) ? rawurldecode((string) basename($path)) : '';
+
+        return str_starts_with($transactionId, 'tbx-') ? $transactionId : null;
     }
 
     private function safeCheckoutUrl(mixed $value): ?string

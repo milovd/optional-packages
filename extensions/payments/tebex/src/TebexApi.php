@@ -9,6 +9,8 @@ interface TebexApi
     /** @param array<string, mixed> $payload */
     public function createCheckout(array $payload, ?string $idempotencyKey = null): array;
 
+    /** @return array<string, mixed> */
+    public function getBasket(string $ident): array;
 
     /** @return array<string, mixed> */
     public function getPayment(string $transactionId): array;

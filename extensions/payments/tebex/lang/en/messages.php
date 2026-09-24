@@ -17,6 +17,7 @@ return [
     'errors' => [
         'not_configured' => 'Tebex is not configured.',
         'create_failed' => 'Tebex checkout could not be created.',
+        'checkout_amount_unsupported' => 'This order total cannot be represented safely in Tebex Checkout.',
         'subscription_checkout_unsupported' => 'Tebex subscriptions require exactly one subscription item with quantity one.',
         'subscription_interval_unsupported' => 'This subscription interval is not supported by Tebex Checkout.',
         'subscription_action_failed' => 'The Tebex subscription action could not be completed.',
