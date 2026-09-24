@@ -43,6 +43,52 @@ final class HttpPayPalApi implements PayPalApi
         );
     }
 
+    public function refundSale(string $saleId, array $payload, ?string $idempotencyKey = null): array
+    {
+        return $this->authorized(
+            'POST',
+            '/v1/payments/sale/'.rawurlencode($saleId).'/refund',
+            $payload,
+            $idempotencyKey,
+        );
+    }
+
+    public function createSubscription(array $payload, ?string $idempotencyKey = null): array
+    {
+        return $this->authorized('POST', '/v1/billing/subscriptions', $payload, $idempotencyKey);
+    }
+
+    public function getSubscription(string $id): array
+    {
+        return $this->authorized('GET', '/v1/billing/subscriptions/'.rawurlencode($id));
+    }
+
+    public function getPlan(string $id): array
+    {
+        return $this->authorized('GET', '/v1/billing/plans/'.rawurlencode($id));
+    }
+
+    public function suspendSubscription(string $id, string $reason): void
+    {
+        $this->authorized('POST', '/v1/billing/subscriptions/'.rawurlencode($id).'/suspend', [
+            'reason' => $reason,
+        ]);
+    }
+
+    public function activateSubscription(string $id, string $reason): void
+    {
+        $this->authorized('POST', '/v1/billing/subscriptions/'.rawurlencode($id).'/activate', [
+            'reason' => $reason,
+        ]);
+    }
+
+    public function cancelSubscription(string $id, string $reason): void
+    {
+        $this->authorized('POST', '/v1/billing/subscriptions/'.rawurlencode($id).'/cancel', [
+            'reason' => $reason,
+        ]);
+    }
+
     public function verifyWebhookSignature(array $payload): bool
     {
         $response = $this->authorized('POST', '/v1/notifications/verify-webhook-signature', $payload);

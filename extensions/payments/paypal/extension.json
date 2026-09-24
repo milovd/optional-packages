@@ -2,10 +2,10 @@
     "id": "paypal",
     "name": "PayPal",
     "version": "1.0.0",
-    "description": "Payment Extension for PayPal Checkout Orders, signed webhooks, refunds, and status sync.",
+    "description": "Payment Extension for PayPal Checkout Orders, provider-managed subscriptions, signed webhooks, refunds, and status sync.",
     "author": "Agovena",
     "category": "payment_gateway",
-    "production_ready": false,
+    "production_ready": true,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\PayPal\\PayPalServiceProvider",
     "dependencies": [],
@@ -48,6 +48,15 @@
             "required": false,
             "default": true,
             "help": "paypal::messages.settings.sandbox_help"
+        },
+        {
+            "key": "subscription_plan_id",
+            "label": "paypal::messages.settings.subscription_plan_id",
+            "type": "string",
+            "secret": false,
+            "required": false,
+            "default": "",
+            "help": "paypal::messages.settings.subscription_plan_id_help"
         }
     ]
 }

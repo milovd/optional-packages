@@ -11,12 +11,12 @@ final class PayPalStatusMapper
     public static function map(string $providerStatus): PaymentStatus
     {
         return match (strtoupper(trim($providerStatus))) {
-            'COMPLETED' => PaymentStatus::Paid,
-            'VOIDED' => PaymentStatus::Cancelled,
-            'DECLINED', 'FAILED' => PaymentStatus::Failed,
+            'COMPLETED', 'ACTIVE' => PaymentStatus::Paid,
+            'VOIDED', 'CANCELLED', 'EXPIRED' => PaymentStatus::Cancelled,
+            'DECLINED', 'FAILED', 'DENIED', 'REVERSED' => PaymentStatus::Failed,
             'PARTIALLY_REFUNDED' => PaymentStatus::PartiallyRefunded,
             'REFUNDED' => PaymentStatus::Refunded,
-            'CREATED', 'SAVED', 'APPROVED', 'PAYER_ACTION_REQUIRED' => PaymentStatus::Pending,
+            'CREATED', 'SAVED', 'APPROVED', 'PAYER_ACTION_REQUIRED', 'APPROVAL_PENDING', 'SUSPENDED', 'PENDING' => PaymentStatus::Pending,
             default => PaymentStatus::Pending,
         };
     }
@@ -44,10 +44,16 @@ final class PayPalStatusMapper
 
         return match ($type) {
             'CHECKOUT.ORDER.APPROVED' => PaymentStatus::Pending,
-            'PAYMENT.CAPTURE.COMPLETED' => PaymentStatus::Paid,
-            'PAYMENT.CAPTURE.DENIED', 'PAYMENT.CAPTURE.DECLINED' => PaymentStatus::Failed,
-            'PAYMENT.CAPTURE.REFUNDED' => PaymentStatus::Refunded,
+            'PAYMENT.CAPTURE.COMPLETED', 'PAYMENT.SALE.COMPLETED' => PaymentStatus::Paid,
+            'PAYMENT.CAPTURE.PENDING', 'PAYMENT.CAPTURE.REFUND.PENDING' => PaymentStatus::Pending,
+            'PAYMENT.CAPTURE.DENIED', 'PAYMENT.CAPTURE.DECLINED',
+            'PAYMENT.SALE.DENIED', 'PAYMENT.SALE.REVERSED',
+            'PAYMENT.CAPTURE.REFUND.FAILED' => PaymentStatus::Failed,
+            'PAYMENT.CAPTURE.REFUNDED', 'PAYMENT.SALE.REFUNDED' => PaymentStatus::Refunded,
             'PAYMENT.CAPTURE.REVERSED' => PaymentStatus::Cancelled,
+            'BILLING.SUBSCRIPTION.CANCELLED', 'BILLING.SUBSCRIPTION.EXPIRED' => PaymentStatus::Cancelled,
+            'BILLING.SUBSCRIPTION.ACTIVATED', 'BILLING.SUBSCRIPTION.UPDATED',
+            'BILLING.SUBSCRIPTION.SUSPENDED' => PaymentStatus::Pending,
             default => null,
         };
     }
