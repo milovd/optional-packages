@@ -1,10 +1,12 @@
-<div class="store-provider-checkout store-provider-checkout--paddle">
+<div class="store-provider-checkout store-provider-checkout--paddle store-provider-checkout--overlay">
     @if ($clientToken === null)
         <p class="store-provider-checkout__message store-note" role="alert">{{ __('paddle::messages.checkout.missing_client_token') }}</p>
     @elseif ($transactionId === null)
         <p class="store-provider-checkout__message store-note" role="alert">{{ __('paddle::messages.checkout.missing_transaction') }}</p>
     @else
-        <div class="paddle-checkout-frame store-provider-checkout__frame" role="region" aria-label="{{ __('paddle::messages.checkout.aria_label') }}" aria-live="polite"></div>
+        <p id="paddle-checkout-status" class="store-provider-checkout__message store-note" role="status" aria-live="polite">
+            {{ __('paddle::messages.checkout.loading') }}
+        </p>
         <noscript>
             <p class="store-provider-checkout__message store-note" role="alert">{{ __('paddle::messages.checkout.javascript_required') }}</p>
         </noscript>
@@ -21,11 +23,9 @@
                     const allowedPaymentMethods = @json($allowedPaymentMethods);
                     const checkoutTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
                     const checkoutLocale = @json($locale);
+                    const checkoutStatus = document.getElementById('paddle-checkout-status');
                     const checkoutSettings = {
-                        displayMode: 'inline',
-                        frameTarget: 'paddle-checkout-frame',
-                        frameInitialHeight: '650',
-                        frameStyle: 'display: block; width: 100%; min-width: 312px; border: 0; background-color: transparent;',
+                        displayMode: 'overlay',
                         variant: 'one-page',
                         theme: checkoutTheme,
                         locale: checkoutLocale,
@@ -62,6 +62,9 @@
                         token: @json($clientToken),
                         checkout: { settings: checkoutSettings },
                         eventCallback: function (event) {
+                            if (event.name === 'checkout.loaded' && checkoutStatus !== null) {
+                                checkoutStatus.hidden = true;
+                            }
                             if (event.name === 'checkout.completed') {
                                 window.setTimeout(function () {
                                     returnToStatus('completed');
