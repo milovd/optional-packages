@@ -1,7 +1,10 @@
 <?php
 
 return [
-    'gateway' => ['label' => 'Tebex'],
+    'gateway' => [
+        'label' => 'Tebex',
+        'checkout' => 'Tebex Checkout',
+    ],
     'settings' => [
         'project_id' => 'Project-ID',
         'project_id_help' => 'Identificatie van het Tebex Checkout-project.',
@@ -22,14 +25,6 @@ return [
         'webhook_invalid' => 'De Tebex-webhook is ongeldig.',
         'refund_failed' => 'De Tebex-refund kon niet worden aangemaakt.',
         'partial_refund_unsupported' => 'Deze Agovena-adapter ondersteunt momenteel alleen volledige Tebex-refunds.',
-    ],
-    'checkout' => [
-        'title' => 'Tebex-checkout',
-        'loading' => 'Tebex-checkout wordt geladen...',
-        'open' => 'Tebex-checkout openen',
-        'unavailable' => 'Tebex-checkout kon niet worden geladen. Probeer opnieuw.',
-        'missing_basket' => 'De Tebex-checkout kon niet worden gevonden.',
-        'javascript_required' => 'JavaScript is vereist om de Tebex-checkout te openen.',
     ],
     'health' => [
         'missing_credentials' => 'Tebex project-ID of geheime sleutel ontbreekt.',

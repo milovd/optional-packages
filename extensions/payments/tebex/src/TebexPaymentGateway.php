@@ -70,7 +70,12 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
 
     public function checkoutMethods(): array
     {
-        return [new CheckoutPaymentMethod(self::ID, self::ID.':tebex', $this->label())];
+        return [new CheckoutPaymentMethod(
+            self::ID,
+            self::ID.':tebex',
+            __('tebex::messages.gateway.checkout'),
+            'ag:payment-method/tebex',
+        )];
     }
 
     public function initiate(PaymentInitiation $request): PaymentInitiationResult
