@@ -16,6 +16,7 @@
                         Paddle.Environment.set('sandbox');
                     @endif
 
+                    const transactionId = @json($transactionId);
                     const returnUrl = @json($returnUrl);
                     const allowedPaymentMethods = @json($allowedPaymentMethods);
                     const checkoutTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
@@ -79,6 +80,11 @@
                                     break;
                             }
                         },
+                    });
+
+                    Paddle.Checkout.open({
+                        transactionId: transactionId,
+                        settings: checkoutSettings,
                     });
                 });
             </script>
