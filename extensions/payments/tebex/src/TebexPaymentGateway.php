@@ -105,7 +105,7 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
                 ],
                 'items' => $this->checkoutItems($request->order),
             ], $request->idempotencyKey);
-            $ident = (string) ($checkout['ident'] ?? $checkout['id'] ?? '');
+            $ident = is_string($checkout['ident'] ?? null) ? trim($checkout['ident']) : '';
             if ($ident === '') {
                 return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
             }
@@ -124,8 +124,8 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
         }
 
-        $checkoutUrl = $checkout['links']['checkout'] ?? null;
-        if (! is_string($checkoutUrl) || $checkoutUrl === '') {
+        $checkoutUrl = $this->safeCheckoutUrl($checkout['links']['checkout'] ?? null);
+        if ($checkoutUrl === null) {
             return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
         }
 
@@ -173,7 +173,12 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         $type = (string) ($event['type'] ?? '');
         $paymentSubject = $this->recurringPaymentSubject($subject, $type);
         $externalId = (string) ($subject['transaction_id'] ?? $paymentSubject['transaction_id'] ?? '');
-        $statusId = is_scalar($subject['status']['id'] ?? null) ? $subject['status']['id'] : null;
+        $statusId = is_scalar($paymentSubject['status']['id'] ?? null)
+            ? $paymentSubject['status']['id']
+            : (is_scalar($subject['status']['id'] ?? null) ? $subject['status']['id'] : null);
+        $custom = $subject['custom'] ?? ($subject['custom_data'] ?? ($paymentSubject['custom'] ?? ($paymentSubject['custom_data'] ?? null)));
+        $pricePaid = $paymentSubject['price_paid'] ?? ($subject['price_paid'] ?? null);
+        $products = $paymentSubject['products'] ?? ($subject['products'] ?? []);
         $status = $type === 'payment.refunded' && $statusId !== null
             ? TebexStatusMapper::fromPaymentStatusId($statusId)
             : ($type !== '' ? TebexStatusMapper::fromWebhook($type) : TebexStatusMapper::fromPaymentStatusId($statusId));
@@ -185,14 +190,18 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             raw: [
                 'type' => $type,
                 'transaction_id' => $externalId,
-                'price_paid' => $subject['price_paid'] ?? null,
-                'products' => $subject['products'] ?? [],
-                'custom' => $subject['custom'] ?? ($subject['custom_data'] ?? null),
+                'price_paid' => $pricePaid,
+                'products' => $products,
+                'custom' => $custom,
                 'recurring_payment_reference' => $subject['recurring_payment_reference'] ?? $subject['reference'] ?? null,
                 'status_id' => $statusId,
-                'status_description' => $subject['status']['description'] ?? null,
+                'status_description' => $paymentSubject['status']['description'] ?? ($subject['status']['description'] ?? null),
+                'recurring_status_id' => $subject['status']['id'] ?? null,
+                'recurring_status_description' => $subject['status']['description'] ?? null,
                 'next_payment_at' => $subject['next_payment_at'] ?? null,
                 'created_at' => $subject['created_at'] ?? null,
+                'event_date' => $event['date'] ?? null,
+                'payment_created_at' => $paymentSubject['created_at'] ?? null,
                 'payment_sequence' => $subject['payment_sequence'] ?? null,
             ],
         );
@@ -234,7 +243,7 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
 
         $pricePaid = is_array($payload->raw['price_paid'] ?? null) ? $payload->raw['price_paid'] : [];
         if (strtoupper((string) ($pricePaid['currency'] ?? '')) !== strtoupper((string) $payment->currency)
-            || self::minorUnits($pricePaid['amount'] ?? null) !== (int) $payment->amount) {
+            || self::minorUnits($pricePaid['amount'] ?? null, (string) $payment->currency) !== (int) $payment->amount) {
             return false;
         }
 
@@ -296,6 +305,9 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             'recurring-payment.cancellation.requested' => ['subscription.cancellation_requested', 'active', true],
             'recurring-payment.cancellation.aborted' => ['subscription.cancellation_aborted', 'active', false],
             'recurring-payment.ended' => ['subscription.canceled', 'canceled', false],
+            'recurring-payment.status-changed' => $this->mapRecurringStatus(
+                (string) ($payload->raw['recurring_status_description'] ?? ''),
+            ),
             default => [null, null, null],
         };
         if ($eventType === null || $status === null) {
@@ -314,7 +326,7 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
                 ? $payload->raw['transaction_id']
                 : null,
             originOrderId: is_scalar($custom['order_id'] ?? null) ? (string) $custom['order_id'] : null,
-            periodStart: is_string($payload->raw['created_at'] ?? null) ? $payload->raw['created_at'] : null,
+            periodStart: is_string($payload->raw['payment_created_at'] ?? null) ? $payload->raw['payment_created_at'] : null,
             nextBillingAt: is_string($nextPaymentAt) ? $nextPaymentAt : null,
             cancelAtPeriodEnd: $cancelAtPeriodEnd,
             customData: $custom,
@@ -329,10 +341,10 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             return null;
         }
 
-        $status = match ((int) ($payload->raw['status_id'] ?? 2)) {
+        $status = match ((int) ($payload->raw['status_id'] ?? 0)) {
             21 => 'pending',
             2 => 'approved',
-            default => 'rejected',
+            default => 'unknown',
         };
 
         return new ProviderRefundEvent(
@@ -343,20 +355,22 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         );
     }
 
-    private static function minorUnits(mixed $amount): ?int
+    private static function minorUnits(mixed $amount, string $currency): ?int
     {
-        if (is_int($amount)) {
-            return $amount * 100;
-        }
-        if (! is_string($amount) && ! is_float($amount)) {
-            return null;
-        }
-        $value = (string) $amount;
-        if (! preg_match('/^(\\d+)(?:\\.(\\d{1,2}))?$/', $value, $matches)) {
+        if (! is_string($amount) && ! is_int($amount) && ! is_float($amount)) {
             return null;
         }
 
-        return ((int) $matches[1] * 100) + (int) str_pad($matches[2] ?? '', 2, '0');
+        $value = trim((string) $amount);
+        if (! preg_match('/^\\d+(?:\\.\\d{1,6})?$/', $value)) {
+            return null;
+        }
+
+        try {
+            return MoneyFormatter::minorFromMajorInput($value, $currency);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function refund(RefundRequest $request): RefundResult
@@ -367,9 +381,27 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         }
 
         $api = $this->client();
-        $attempt = $this->latestExternalAttempt($request->payment);
+        $attempt = $this->latestTransactionAttempt($request->payment);
         if ($api === null || $attempt?->external_id === null) {
             return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
+        }
+
+        try {
+            $currentPayment = $api->getPayment($attempt->external_id);
+            $currentStatusId = (int) ($currentPayment['status']['id'] ?? 0);
+            if ($currentStatusId === 2) {
+                return RefundResult::ok($attempt->external_id, ['provider_status' => 'approved', 'reconciled' => true]);
+            }
+            if ($currentStatusId === 21) {
+                return RefundResult::ok($attempt->external_id, ['provider_status' => 'pending', 'reconciled' => true]);
+            }
+            if ($currentStatusId !== 1) {
+                return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
+            }
+        } catch (TebexProviderException $exception) {
+            return $exception->unknownOutcome
+                ? RefundResult::unknown(['transaction_id' => $attempt->external_id])
+                : RefundResult::fail(__('tebex::messages.errors.refund_failed'));
         }
 
         try {
@@ -382,12 +414,12 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
         }
 
-        $externalRefundId = $refund['id'] ?? $refund['transaction_id'] ?? null;
+        $externalRefundId = $refund['transaction_id'] ?? $refund['id'] ?? null;
         if (! is_string($externalRefundId) || trim($externalRefundId) === '') {
             return RefundResult::fail(__('tebex::messages.errors.refund_failed'));
         }
 
-        $providerStatus = match ((int) ($refund['status']['id'] ?? 2)) {
+        $providerStatus = match ((int) ($refund['status']['id'] ?? 0)) {
             2 => 'approved',
             21 => 'pending',
             18 => 'rejected',
@@ -414,14 +446,26 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         try {
             $remote = $api->getPayment($attempt->external_id);
             $status = TebexStatusMapper::fromPaymentStatusId($remote['status']['id'] ?? null);
-            if ($status === PaymentStatus::Refunded || $status === PaymentStatus::Pending) {
-                $this->applyRefundEvent->handle(new ProviderRefundEvent(
+            $statusId = (int) ($remote['status']['id'] ?? 0);
+            if (in_array($statusId, [2, 21], true)) {
+                $refundApplied = $this->applyRefundEvent->handle(new ProviderRefundEvent(
                     gatewayId: self::ID,
                     externalRefundId: $attempt->external_id,
                     transactionId: $attempt->external_id,
-                    status: $status === PaymentStatus::Refunded ? 'approved' : 'pending',
+                    status: $statusId === 2 ? 'approved' : 'pending',
                 ));
+                if (! $refundApplied) {
+                    Log::warning('payment.sync.refund_unmatched', [
+                        'gateway_id' => self::ID,
+                        'payment_id' => $payment->id,
+                        'external_payment_id' => $attempt->external_id,
+                        'provider_status_id' => $statusId,
+                    ]);
+                }
+
+                return $payment->fresh() ?? $payment;
             }
+
             $this->applyStatus->handle($attempt, $status);
         } catch (TebexProviderException) {
             Log::warning('payment.sync.failed', ['gateway_id' => self::ID, 'payment_id' => $payment->id]);
@@ -613,16 +657,6 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
 
-    private function latestExternalAttempt(Payment $payment): ?PaymentAttempt
-    {
-        return PaymentAttempt::query()
-            ->where('payment_id', $payment->id)
-            ->where('gateway_id', self::ID)
-            ->whereNotNull('external_id')
-            ->latest('id')
-            ->first();
-    }
-
     private function latestTransactionAttempt(Payment $payment): ?PaymentAttempt
     {
         return PaymentAttempt::query()
@@ -631,5 +665,34 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             ->where('external_id', 'like', 'tbx-%')
             ->latest('id')
             ->first();
+    }
+
+    private function safeCheckoutUrl(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        $url = trim($value);
+        $parts = parse_url($url);
+        if (! is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || strtolower(rtrim((string) ($parts['host'] ?? ''), '.')) !== 'checkout.tebex.io'
+        ) {
+            return null;
+        }
+
+        return $url;
+    }
+
+    /** @return array{0: ?string, 1: ?string, 2: ?bool} */
+    private function mapRecurringStatus(string $description): array
+    {
+        return match (strtolower(trim($description))) {
+            'active', 'pending downgrade' => ['subscription.status_changed', 'active', null],
+            'overdue' => ['subscription.status_changed', 'past_due', null],
+            'expired', 'cancelled', 'canceled' => ['subscription.canceled', 'canceled', false],
+            default => [null, null, null],
+        };
     }
 }
