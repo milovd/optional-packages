@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Extensions\Tebex;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
+use App\Support\MoneyFormatter;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\ApplyProviderRefundEvent;
 use App\Agovena\Payments\CheckoutPaymentMethod;
@@ -83,53 +84,26 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             return PaymentInitiationResult::failed(__('tebex::messages.errors.subscription_checkout_unsupported'));
         }
 
-        $packageMap = $this->packageMap();
-        $packages = [];
         $ident = null;
-        foreach ($request->order->items as $item) {
-            $packageId = $packageMap[(string) $item->product_id] ?? null;
-            if (! is_string($packageId) || $packageId === '') {
-                return PaymentInitiationResult::failed(__('tebex::messages.errors.package_mapping_missing'));
-            }
-            $packages[$packageId] = ($packages[$packageId] ?? 0) + max(1, (int) $item->quantity);
-        }
-
         try {
-            $basket = $api->createBasket([
-                'email' => (string) $request->order->customer_email,
-                'return_url' => $request->cancelUrl,
-                'complete_url' => $request->returnUrl,
-                'custom' => [
-                    'order_id' => (string) $request->order->id,
-                    'payment_id' => (string) $request->payment->id,
-                    'attempt_key' => $request->idempotencyKey,
+            $checkout = $api->createCheckout([
+                'basket' => [
+                    'first_name' => (string) $request->order->customer_name,
+                    'email' => (string) $request->order->customer_email,
+                    'return_url' => $request->cancelUrl,
+                    'complete_url' => $request->returnUrl,
+                    'custom' => [
+                        'order_id' => (string) $request->order->id,
+                        'payment_id' => (string) $request->payment->id,
+                        'attempt_key' => $request->idempotencyKey,
+                    ],
                 ],
+                'items' => $this->checkoutItems($request->order),
             ], $request->idempotencyKey);
-            $ident = (string) ($basket['ident'] ?? $basket['id'] ?? '');
+            $ident = (string) ($checkout['ident'] ?? $checkout['id'] ?? '');
             if ($ident === '') {
                 return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
             }
-
-            $basket = $api->getBasket($ident);
-            $existingPackages = $this->basketPackageQuantities($basket);
-            foreach ($packages as $packageId => $quantity) {
-                $packageId = (string) $packageId;
-                $missingQuantity = max(0, $quantity - ($existingPackages[$packageId] ?? 0));
-                if ($missingQuantity === 0) {
-                    continue;
-                }
-
-                $api->addPackage(
-                    $ident,
-                    $packageId,
-                    $missingQuantity,
-                    $request->idempotencyKey !== null && $request->idempotencyKey !== ''
-                        ? $request->idempotencyKey.':package:'.$packageId
-                        : null,
-                );
-                $existingPackages[$packageId] = ($existingPackages[$packageId] ?? 0) + $missingQuantity;
-            }
-            $basket = $api->getBasket($ident);
         } catch (TebexProviderException $exception) {
             Log::warning('payment.initiate.failed', [
                 'gateway_id' => self::ID,
@@ -137,24 +111,27 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             ]);
 
             if ($exception->unknownOutcome) {
-                return PaymentInitiationResult::unknown(metadata: array_filter([
+                return PaymentInitiationResult::unknown(metadata: [
                     'provider_outcome' => 'unknown',
-                    'basket_ident' => $ident,
-                ]));
+                ]);
             }
 
             return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
         }
 
-        $url = $basket['links']['checkout'] ?? null;
-        if (! is_string($url) || $url === '') {
+        $checkoutUrl = $checkout['links']['checkout'] ?? null;
+        if (! is_string($checkoutUrl) || $checkoutUrl === '') {
             return PaymentInitiationResult::failed(__('tebex::messages.errors.create_failed'));
         }
 
         return PaymentInitiationResult::redirect(
-            url: $url,
+            url: $checkoutUrl,
             externalId: $ident,
-            metadata: ['provider_status' => 'created', 'basket_ident' => $ident],
+            metadata: [
+                'provider_status' => 'created',
+                'basket_ident' => $ident,
+                'provider_checkout_url' => $checkoutUrl,
+            ],
         );
     }
 
@@ -256,27 +233,16 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
             return false;
         }
 
-        $expected = [];
-        $packageMap = $this->packageMap();
-        foreach ($payment->order->items as $item) {
-            $packageId = $packageMap[(string) $item->product_id] ?? null;
-            if (! is_string($packageId) || $packageId === '') {
-                return false;
-            }
-            $expected[] = $packageId.':'.max(1, (int) $item->quantity);
-        }
-
-        $actual = [];
+        $expectedQuantity = $payment->order->items->sum(static fn ($item): int => max(1, (int) $item->quantity));
+        $actualQuantity = 0;
         foreach ((array) ($payload->raw['products'] ?? []) as $product) {
-            if (! is_array($product) || ! isset($product['id'], $product['quantity'])) {
+            if (! is_array($product) || ! isset($product['quantity']) || ! is_numeric($product['quantity'])) {
                 return false;
             }
-            $actual[] = (string) $product['id'].':'.max(1, (int) $product['quantity']);
+            $actualQuantity += max(0, (int) $product['quantity']);
         }
-        sort($expected);
-        sort($actual);
 
-        return $expected === $actual;
+        return $actualQuantity > 0 && $expectedQuantity === $actualQuantity;
     }
 
     public function managesProviderSubscriptions(): bool
@@ -513,6 +479,47 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         return [];
     }
 
+    /** @return list<array{package: array<string, mixed>, qty: int}> */
+    private function checkoutItems(Order $order): array
+    {
+        $automatic = $this->renewalModeFor($order) === 'automatic';
+        $items = [];
+
+        foreach ($order->items as $item) {
+            $item->loadMissing('product.capabilities');
+            $package = [
+                'name' => trim((string) $item->label) !== ''
+                    ? trim((string) $item->label)
+                    : 'Product '.(string) $item->product_id,
+                'price' => (float) MoneyFormatter::majorInputFromMinor(
+                    (int) $item->unit_amount,
+                    (string) $item->currency,
+                ),
+                'type' => $automatic ? 'subscription' : 'single',
+                'custom' => [
+                    'agovena_product_id' => (string) $item->product_id,
+                    'agovena_order_item_id' => (string) $item->id,
+                ],
+            ];
+
+            if ($automatic) {
+                $capability = $item->product?->capability('subscribable');
+                $recurring = $this->recurringPackageAttributes($capability?->config ?? []);
+                if ($recurring === null) {
+                    throw TebexProviderException::failed('tebex::messages.errors.subscription_interval_unsupported');
+                }
+                $package = [...$package, ...$recurring];
+            }
+
+            $items[] = [
+                'package' => $package,
+                'qty' => max(1, (int) $item->quantity),
+            ];
+        }
+
+        return $items;
+    }
+
     private function supportsRecurringOrder(Order $order): bool
     {
         if ($order->items->count() !== 1) {
@@ -526,7 +533,24 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
 
         $item->loadMissing('product.capabilities');
 
-        return $item->product?->capability('subscribable') !== null;
+        $capability = $item->product?->capability('subscribable');
+
+        return $capability !== null && $this->recurringPackageAttributes($capability->config) !== null;
+    }
+
+    /** @param array<string, mixed> $config */
+    private function recurringPackageAttributes(array $config): ?array
+    {
+        $period = strtolower(trim((string) ($config['interval'] ?? '')));
+        $length = (int) ($config['interval_count'] ?? 0);
+        if (! in_array($period, ['day', 'month', 'year'], true) || $length < 1) {
+            return null;
+        }
+
+        return [
+            'expiry_period' => $period,
+            'expiry_length' => $length,
+        ];
     }
 
     private function renewalModeFor(Order $order): ?string
@@ -561,45 +585,6 @@ final class TebexPaymentGateway implements HandlesProviderRefundEvents, ManagesP
         $attempt->save();
     }
 
-    /** @return array<string, string> */
-    private function packageMap(): array
-    {
-        $value = $this->settings->get(self::ID, 'package_map', []);
-        if (is_string($value)) {
-            $value = json_decode($value, true);
-        }
-        if (! is_array($value)) {
-            return [];
-        }
-
-        $map = [];
-        foreach ($value as $productId => $packageId) {
-            if (is_scalar($packageId) && trim((string) $packageId) !== '') {
-                $map[(string) $productId] = trim((string) $packageId);
-            }
-        }
-
-        return $map;
-    }
-
-    /** @return array<string, int> */
-    private function basketPackageQuantities(array $basket): array
-    {
-        $quantities = [];
-        foreach ((array) ($basket['packages'] ?? []) as $package) {
-            if (! is_array($package)) {
-                continue;
-            }
-            $packageId = $package['id'] ?? (is_array($package['package'] ?? null) ? $package['package']['id'] ?? null : null);
-            $quantity = $package['quantity'] ?? $package['qty'] ?? null;
-            if (! is_scalar($packageId) || ! is_numeric($quantity)) {
-                continue;
-            }
-            $quantities[(string) $packageId] = ($quantities[(string) $packageId] ?? 0) + max(0, (int) $quantity);
-        }
-
-        return $quantities;
-    }
 
     private function projectId(): ?string
     {

@@ -20,7 +20,6 @@ final class TebexExtension implements Extension
         $context->setting(new ExtensionSettingDefinition('project_id', 'tebex::messages.settings.project_id', 'string', required: true, help: 'tebex::messages.settings.project_id_help'));
         $context->setting(new ExtensionSettingDefinition('secret_key', 'tebex::messages.settings.secret_key', 'string', secret: true, required: true, help: 'tebex::messages.settings.secret_key_help'));
         $context->setting(new ExtensionSettingDefinition('webhook_secret', 'tebex::messages.settings.webhook_secret', 'string', secret: true, required: true, help: 'tebex::messages.settings.webhook_secret_help'));
-        $context->setting(new ExtensionSettingDefinition('package_map', 'tebex::messages.settings.package_map', 'string', required: true, help: 'tebex::messages.settings.package_map_help'));
         $context->paymentGateway(app(TebexPaymentGateway::class));
         $context->health(static fn () => app(TebexPaymentGateway::class)->health());
     }

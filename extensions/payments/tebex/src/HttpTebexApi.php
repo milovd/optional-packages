@@ -18,23 +18,11 @@ final class HttpTebexApi implements TebexApi, TebexConnectionChecker
         private readonly string $secretKey,
     ) {}
 
-    public function createBasket(array $payload, ?string $idempotencyKey = null): array
+    public function createCheckout(array $payload, ?string $idempotencyKey = null): array
     {
-        return $this->request('post', '/baskets', $payload, $idempotencyKey);
+        return $this->request('post', '/checkout', $payload, $idempotencyKey);
     }
 
-    public function getBasket(string $ident): array
-    {
-        return $this->request('get', '/baskets/'.rawurlencode($ident));
-    }
-
-    public function addPackage(string $ident, string $packageId, int $quantity, ?string $idempotencyKey = null): array
-    {
-        return $this->request('post', '/baskets/'.rawurlencode($ident).'/packages', [
-            'package' => ['id' => $packageId],
-            'qty' => $quantity,
-        ], $idempotencyKey);
-    }
 
     public function getPayment(string $transactionId): array
     {
