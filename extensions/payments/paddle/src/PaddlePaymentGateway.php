@@ -202,6 +202,10 @@ final class PaddlePaymentGateway implements CancelsPayments, ConfiguresCheckoutM
                     'description' => $orderDescription,
                     'tax_category' => 'standard',
                 ],
+                'quantity' => [
+                    'minimum' => 1,
+                    'maximum' => 1,
+                ],
             ],
         ]];
         $billingCycle = $this->billingCycleFor($request->order);
