@@ -7,9 +7,10 @@ namespace Agovena\Extensions\PayPal;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
+use App\Agovena\Payments\Contracts\ChargesRecurringPayments;
 use App\Agovena\Payments\Contracts\HandlesProviderRefundEvents;
-use App\Agovena\Payments\Contracts\ManagesProviderSubscriptions;
 use App\Agovena\Payments\Contracts\OffersCheckoutMethods;
+use App\Agovena\Payments\Contracts\OffersReusablePaymentAuthorization;
 use App\Agovena\Payments\Contracts\PaymentGateway;
 use App\Agovena\Payments\Contracts\SynchronizesPayments;
 use App\Agovena\Payments\Contracts\ValidatesWebhookPayload;
@@ -18,9 +19,9 @@ use App\Agovena\Payments\PaymentGatewayCapabilities;
 use App\Agovena\Payments\PaymentInitiation;
 use App\Agovena\Payments\PaymentInitiationResult;
 use App\Agovena\Payments\ProviderRefundEvent;
-use App\Agovena\Payments\ProviderSubscriptionEvent;
 use App\Agovena\Payments\RefundRequest;
 use App\Agovena\Payments\RefundResult;
+use App\Agovena\Payments\ReusablePaymentAuthorization;
 use App\Agovena\Payments\WebhookPayload;
 use App\Enums\PaymentStatus;
 use App\Models\Order;
@@ -29,8 +30,9 @@ use App\Models\PaymentAttempt;
 use App\Support\MoneyFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
-final class PayPalPaymentGateway implements HandlesProviderRefundEvents, ManagesProviderSubscriptions, OffersCheckoutMethods, PaymentGateway, SynchronizesPayments, ValidatesWebhookPayload
+final class PayPalPaymentGateway implements ChargesRecurringPayments, HandlesProviderRefundEvents, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments, ValidatesWebhookPayload
 {
     public const ID = 'paypal';
 
@@ -82,11 +84,6 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
         ];
     }
 
-    public function managesProviderSubscriptions(): bool
-    {
-        return true;
-    }
-
     public function initiate(PaymentInitiation $request): PaymentInitiationResult
     {
         $api = $this->client();
@@ -95,7 +92,10 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
         }
 
         if ($this->isAutomaticSubscription($request->order)) {
-            return $this->initiateSubscription($request, $api);
+            $authorization = $this->authorizationFor($request);
+            if ($authorization !== null && $authorization->status === 'active') {
+                return $this->charge($request);
+            }
         }
 
         $payload = [
@@ -116,6 +116,34 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
                 'user_action' => 'PAY_NOW',
             ],
         ];
+
+        if ($this->isAutomaticSubscription($request->order)) {
+            $merchantCustomerId = $request->order->customer_id !== null
+                ? (string) $request->order->customer_id
+                : (string) $request->order->customer_email;
+            $payload['payment_source'] = [
+                'paypal' => [
+                    'attributes' => [
+                        'customer' => [
+                            'merchant_customer_id' => $merchantCustomerId,
+                        ],
+                        'vault' => [
+                            'store_in_vault' => 'ON_SUCCESS',
+                            'usage_type' => 'MERCHANT',
+                            'usage_pattern' => 'SUBSCRIPTION_PREPAID',
+                        ],
+                    ],
+                    'experience_context' => [
+                        'return_url' => $request->returnUrl,
+                        'cancel_url' => $request->cancelUrl,
+                        'brand_name' => config('app.name', 'Agovena'),
+                        'user_action' => 'PAY_NOW',
+                        'shipping_preference' => 'NO_SHIPPING',
+                    ],
+                ],
+            ];
+            unset($payload['application_context']);
+        }
 
         try {
             $order = $api->createOrder($payload, $request->idempotencyKey);
@@ -152,6 +180,110 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
                 'provider_status' => (string) ($order['status'] ?? 'CREATED'),
             ],
         );
+    }
+
+    public function reusableAuthorization(?int $customerId, string $customerEmail): ReusablePaymentAuthorization
+    {
+        $row = $this->authorizationRow($customerId, $customerEmail);
+        if ($row === null || $row->payment_token_id === null || $row->payment_token_id === '') {
+            return ReusablePaymentAuthorization::missing(self::ID);
+        }
+
+        if ($row->status !== 'active') {
+            return ReusablePaymentAuthorization::revoked(self::ID, $row->last_verified_at);
+        }
+
+        return ReusablePaymentAuthorization::active(self::ID, $row->last_verified_at);
+    }
+
+    public function charge(PaymentInitiation $request): PaymentInitiationResult
+    {
+        $api = $this->client();
+        if ($api === null) {
+            return PaymentInitiationResult::failed(__('paypal::messages.errors.not_configured'));
+        }
+
+        $authorization = $this->authorizationFor($request);
+        if ($authorization === null
+            || $authorization->status !== 'active'
+            || $authorization->payment_token_id === null
+            || $authorization->payment_token_id === ''
+        ) {
+            return PaymentInitiationResult::failed(__('paypal::messages.errors.recurring_unavailable'), [
+                'reason' => 'authorization_missing',
+            ]);
+        }
+
+        $payload = [
+            'intent' => 'CAPTURE',
+            'purchase_units' => [[
+                'reference_id' => (string) $request->payment->id,
+                'custom_id' => (string) $request->order->id,
+                'invoice_id' => (string) $request->order->number,
+                'description' => $request->order->number,
+                'amount' => [
+                    'currency_code' => strtoupper($request->payment->currency),
+                    'value' => MoneyFormatter::majorInputFromMinor((int) $request->payment->amount, $request->payment->currency),
+                ],
+            ]],
+            'payment_source' => [
+                'paypal' => [
+                    'vault_id' => $authorization->payment_token_id,
+                    'stored_credential' => [
+                        'payment_initiator' => 'MERCHANT',
+                        'payment_type' => 'RECURRING',
+                        'usage' => 'SUBSEQUENT',
+                        'usage_pattern' => 'SUBSCRIPTION_PREPAID',
+                    ],
+                ],
+            ],
+        ];
+
+        try {
+            $order = $api->createOrder($payload, $request->idempotencyKey);
+            if (strtoupper((string) ($order['status'] ?? '')) !== 'COMPLETED') {
+                $captureKey = $request->idempotencyKey !== null && $request->idempotencyKey !== ''
+                    ? $request->idempotencyKey.'-capture'
+                    : null;
+                $order = $api->captureOrder((string) ($order['id'] ?? ''), $captureKey);
+            }
+        } catch (PayPalProviderException $exception) {
+            if ($exception->unknownOutcome) {
+                return PaymentInitiationResult::unknown(
+                    metadata: ['reason' => 'provider_transport_unknown'],
+                    message: __('paypal::messages.errors.unknown_outcome'),
+                );
+            }
+
+            return PaymentInitiationResult::failed(__('paypal::messages.errors.recurring_failed'));
+        }
+
+        $externalId = trim((string) ($order['id'] ?? ''));
+        if ($externalId === '') {
+            return PaymentInitiationResult::unknown(
+                metadata: ['reason' => 'provider_response_invalid'],
+                message: __('paypal::messages.errors.unknown_outcome'),
+            );
+        }
+
+        $this->rememberAuthorizationFromOrder($request->payment, $order);
+        $status = PayPalStatusMapper::fromOrder($order);
+        if ($status === PaymentStatus::Paid) {
+            return PaymentInitiationResult::completed($externalId, [
+                'provider_status' => (string) ($order['status'] ?? ''),
+                'paypal_capture_id' => $this->captureIdFromOrder($order),
+            ]);
+        }
+
+        if (in_array($status, [PaymentStatus::Failed, PaymentStatus::Cancelled], true)) {
+            return PaymentInitiationResult::failed(__('paypal::messages.errors.recurring_failed'), [
+                'provider_status' => (string) ($order['status'] ?? ''),
+            ]);
+        }
+
+        return PaymentInitiationResult::pending($externalId, [
+            'provider_status' => (string) ($order['status'] ?? ''),
+        ]);
     }
 
     public function mapStatus(string $providerStatus): PaymentStatus
@@ -242,22 +374,23 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
             : [];
         $orderId = $this->firstString($relatedIds, ['order_id'])
             ?? $this->firstString($resource, ['custom_id']);
-        $subscriptionId = $this->firstString($resource, ['billing_agreement_id'])
-            ?? ($eventType === 'BILLING.SUBSCRIPTION.ACTIVATED'
-                || $eventType === 'BILLING.SUBSCRIPTION.UPDATED'
-                || $eventType === 'BILLING.SUBSCRIPTION.SUSPENDED'
-                || $eventType === 'BILLING.SUBSCRIPTION.CANCELLED'
-                || $eventType === 'BILLING.SUBSCRIPTION.EXPIRED'
-                ? $resourceId
-                : null);
         $amount = is_array($resource['amount'] ?? null) ? $resource['amount'] : [];
         $amountMinor = $this->minorAmount($amount['value'] ?? $amount['total'] ?? null, $amount['currency_code'] ?? $amount['currency'] ?? null);
         $currency = $this->firstString($amount, ['currency_code', 'currency']);
         $isSaleEvent = str_starts_with($eventType, 'PAYMENT.SALE.');
         $isCaptureEvent = str_starts_with($eventType, 'PAYMENT.CAPTURE.');
-        $externalPaymentId = $isSaleEvent && $subscriptionId !== null
-            ? $subscriptionId
-            : ($isCaptureEvent && $orderId !== null ? $orderId : $resourceId);
+        $vaultId = $this->vaultIdFromResource($resource);
+        if ($eventType === 'VAULT.PAYMENT-TOKEN.CREATED') {
+            $this->rememberAuthorizationFromVaultResource($resource);
+        }
+        if (in_array($eventType, ['VAULT.PAYMENT-TOKEN.DELETED', 'VAULT.PAYMENT-TOKEN.DELETION-INITIATED'], true)) {
+            $this->revokeAuthorizationByToken($resourceId);
+        }
+        $externalPaymentId = $isCaptureEvent && $orderId !== null
+            ? $orderId
+            : ($isSaleEvent
+                ? ($this->firstString($resource, ['custom_id', 'invoice_id']) ?? $resourceId)
+                : $resourceId);
 
         return new WebhookPayload(
             externalEventId: (string) ($event['id'] ?? ''),
@@ -267,62 +400,16 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
                 'event_type' => $eventType,
                 'resource_id' => $resourceId,
                 'order_id' => $orderId,
-                'subscription_id' => $subscriptionId,
                 'custom_id' => $this->firstString($resource, ['custom_id']),
-                'plan_id' => $this->firstString($resource, ['plan_id']),
                 'currency_code' => $currency,
                 'amount_minor' => $amountMinor,
+                'vault_id' => $vaultId,
                 'sale_id' => $isSaleEvent ? $resourceId : null,
                 'capture_id' => $isCaptureEvent && ! str_contains($eventType, 'REFUND.') ? $resourceId : null,
                 'refund_id' => str_contains($eventType, 'REFUND') || str_ends_with($eventType, '.REFUNDED') ? $resourceId : null,
                 'transaction_id' => $externalPaymentId,
                 'refund_status' => $this->refundStatus($eventType, $resource),
-                'subscription_status' => $this->firstString($resource, ['status']),
-                'period_start' => $this->firstString($resource, ['start_time']),
-                'next_billing_at' => $this->nextBillingAt($resource),
             ], static fn (mixed $value): bool => $value !== null && $value !== ''),
-        );
-    }
-
-    public function providerSubscriptionEvent(WebhookPayload $payload): ?ProviderSubscriptionEvent
-    {
-        $eventType = (string) ($payload->raw['event_type'] ?? '');
-        if (! in_array($eventType, [
-            'BILLING.SUBSCRIPTION.ACTIVATED',
-            'BILLING.SUBSCRIPTION.UPDATED',
-            'BILLING.SUBSCRIPTION.SUSPENDED',
-            'BILLING.SUBSCRIPTION.CANCELLED',
-            'BILLING.SUBSCRIPTION.EXPIRED',
-        ], true)) {
-            return null;
-        }
-        $subscriptionId = trim((string) ($payload->raw['subscription_id'] ?? ''));
-        if (! $this->isProviderSubscriptionId($subscriptionId)) {
-            return null;
-        }
-
-        $providerStatus = strtoupper((string) ($payload->raw['subscription_status'] ?? ''));
-        [$normalizedEventType, $status, $cancelAtPeriodEnd] = match ($providerStatus) {
-            'CANCELLED', 'EXPIRED' => ['subscription.canceled', 'canceled', false],
-            'SUSPENDED' => ['subscription.updated', 'active', true],
-            default => ['subscription.updated', 'active', false],
-        };
-
-        return new ProviderSubscriptionEvent(
-            gatewayId: self::ID,
-            externalSubscriptionId: $subscriptionId,
-            eventType: $normalizedEventType,
-            status: $status,
-            transactionId: is_string($payload->raw['sale_id'] ?? null) ? $payload->raw['sale_id'] : null,
-            originOrderId: is_scalar($payload->raw['custom_id'] ?? null) ? (string) $payload->raw['custom_id'] : null,
-            periodStart: is_string($payload->raw['period_start'] ?? null) ? $payload->raw['period_start'] : null,
-            periodEnd: is_string($payload->raw['next_billing_at'] ?? null) ? $payload->raw['next_billing_at'] : null,
-            nextBillingAt: is_string($payload->raw['next_billing_at'] ?? null) ? $payload->raw['next_billing_at'] : null,
-            cancelAtPeriodEnd: $cancelAtPeriodEnd,
-            customData: [
-                'paypal_event_type' => $eventType,
-                'plan_id' => $payload->raw['plan_id'] ?? null,
-            ],
         );
     }
 
@@ -377,16 +464,7 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
             return false;
         }
 
-        $eventType = (string) ($raw['event_type'] ?? '');
-        $subscriptionId = is_string($raw['subscription_id'] ?? null) ? trim($raw['subscription_id']) : '';
-        if (str_starts_with($eventType, 'PAYMENT.SALE.') && ! $this->isProviderSubscriptionId($subscriptionId)) {
-            return false;
-        }
-
         $meta = is_array($attempt->response_meta) ? $attempt->response_meta : [];
-        if ($this->isProviderSubscriptionId($subscriptionId)) {
-            $meta['provider_subscription_id'] = $subscriptionId;
-        }
         foreach (['sale_id' => 'paypal_sale_id', 'capture_id' => 'paypal_capture_id'] as $source => $target) {
             $value = $raw[$source] ?? null;
             if (is_string($value) && trim($value) !== '') {
@@ -397,48 +475,6 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
         $attempt->save();
 
         return true;
-    }
-
-    public function cancelProviderSubscription(string $externalId, bool $atPeriodEnd): void
-    {
-        $api = $this->client();
-        if ($api === null) {
-            throw PayPalProviderException::failed('paypal::messages.errors.not_configured');
-        }
-
-        try {
-            if ($atPeriodEnd) {
-                $api->suspendSubscription($externalId, 'Agovena cancellation at period end');
-            } else {
-                $api->cancelSubscription($externalId, 'Agovena immediate cancellation');
-            }
-        } catch (PayPalProviderException $exception) {
-            throw new PayPalProviderException(
-                __('paypal::messages.errors.subscription_cancel_failed'),
-                'paypal::messages.errors.subscription_cancel_failed',
-                $exception->status,
-                $exception->unknownOutcome,
-            );
-        }
-    }
-
-    public function resumeProviderSubscription(string $externalId): void
-    {
-        $api = $this->client();
-        if ($api === null) {
-            throw PayPalProviderException::failed('paypal::messages.errors.not_configured');
-        }
-
-        try {
-            $api->activateSubscription($externalId, 'Agovena subscription resumed');
-        } catch (PayPalProviderException $exception) {
-            throw new PayPalProviderException(
-                __('paypal::messages.errors.subscription_resume_failed'),
-                'paypal::messages.errors.subscription_resume_failed',
-                $exception->status,
-                $exception->unknownOutcome,
-            );
-        }
     }
 
     public function refund(RefundRequest $request): RefundResult
@@ -526,16 +562,6 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
         }
 
         try {
-            if ($this->isProviderSubscriptionId((string) $attempt->external_id)) {
-                $subscription = $api->getSubscription((string) $attempt->external_id);
-                if ($payment->status === PaymentStatus::Pending
-                    && in_array(strtoupper((string) ($subscription['status'] ?? '')), ['CANCELLED', 'EXPIRED'], true)) {
-                    $this->applyStatus->handle($attempt, PaymentStatus::Failed);
-                }
-
-                return $payment->fresh() ?? $payment;
-            }
-
             $remote = $api->getOrder((string) $attempt->external_id);
         } catch (PayPalProviderException) {
             Log::warning('payment.sync.failed', [
@@ -546,6 +572,7 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
             return $payment;
         }
 
+        $this->rememberAuthorizationFromOrder($payment, $remote);
         $this->applyStatus->handle($attempt, PayPalStatusMapper::fromOrder($remote));
 
         return $payment->fresh() ?? $payment;
@@ -567,171 +594,6 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
         return $this->renewalModeFor($order) === 'automatic'
             && $item->quantity === 1
             && $item->product?->hasCapability('subscribable') === true;
-    }
-
-    private function initiateSubscription(PaymentInitiation $request, PayPalApi $api): PaymentInitiationResult
-    {
-        $planId = $this->subscriptionPlanIdFor($request->order);
-        if ($planId === null) {
-            return PaymentInitiationResult::failed(__('paypal::messages.errors.subscription_plan_missing'));
-        }
-
-        try {
-            $plan = $api->getPlan($planId);
-        } catch (PayPalProviderException) {
-            return PaymentInitiationResult::failed(__('paypal::messages.errors.subscription_plan_invalid'));
-        }
-
-        if (! $this->planMatchesOrder($plan, $request->order, $request->payment->currency, (int) $request->payment->amount)) {
-            return PaymentInitiationResult::failed(__('paypal::messages.errors.subscription_plan_invalid'));
-        }
-
-        $payload = [
-            'plan_id' => $planId,
-            'quantity' => '1',
-            'custom_id' => (string) $request->order->id,
-            'subscriber' => [
-                'email_address' => (string) $request->order->customer_email,
-            ],
-            'application_context' => [
-                'brand_name' => config('app.name', 'Agovena'),
-                'locale' => 'en-US',
-                'shipping_preference' => 'NO_SHIPPING',
-                'user_action' => 'SUBSCRIBE_NOW',
-                'return_url' => $request->returnUrl,
-                'cancel_url' => $request->cancelUrl,
-            ],
-        ];
-
-        try {
-            $subscription = $api->createSubscription($payload, $request->idempotencyKey);
-        } catch (PayPalProviderException $exception) {
-            Log::warning('payment.subscription.initiate.failed', [
-                'gateway_id' => self::ID,
-                'order_id' => $request->order->id,
-            ]);
-
-            if ($exception->unknownOutcome) {
-                return PaymentInitiationResult::unknown(
-                    metadata: ['reason' => 'provider_transport_unknown'],
-                    message: __('paypal::messages.errors.unknown_outcome'),
-                );
-            }
-
-            return PaymentInitiationResult::failed(__('paypal::messages.errors.subscription_failed'));
-        }
-
-        $subscriptionId = trim((string) ($subscription['id'] ?? ''));
-        $url = $this->approvalUrl($subscription);
-        if (! $this->isProviderSubscriptionId($subscriptionId)
-            || $url === null
-            || ! $this->isPayPalApprovalUrl($url)
-        ) {
-            return PaymentInitiationResult::failed(__('paypal::messages.errors.subscription_failed'));
-        }
-
-        return PaymentInitiationResult::redirect(
-            url: $url,
-            externalId: $subscriptionId,
-            metadata: [
-                'provider_status' => (string) ($subscription['status'] ?? 'APPROVAL_PENDING'),
-                'provider_subscription_id' => $subscriptionId,
-                'subscription_plan_id' => $planId,
-            ],
-        );
-    }
-
-    private function subscriptionPlanIdFor(Order $order): ?string
-    {
-        $item = $order->items->first();
-        if ($item !== null) {
-            $item->loadMissing('product.capabilities');
-            $capability = $item->product?->capability('subscribable');
-            $config = $capability?->config;
-            if (is_array($config) && is_string($config['paypal_plan_id'] ?? null) && trim($config['paypal_plan_id']) !== '') {
-                return trim($config['paypal_plan_id']);
-            }
-        }
-
-        $value = $this->settings->get('paypal', 'subscription_plan_id');
-        if (! is_string($value) || trim($value) === '') {
-            return null;
-        }
-
-        return trim($value);
-    }
-
-    /**
-     * @param  array<string, mixed>  $plan
-     */
-    private function planMatchesOrder(array $plan, Order $order, string $currency, int $amount): bool
-    {
-        if (strtoupper((string) ($plan['status'] ?? '')) !== 'ACTIVE') {
-            return false;
-        }
-
-        $item = $order->items->first();
-        if ($item === null || $item->quantity !== 1) {
-            return false;
-        }
-        $item->loadMissing('product.capabilities');
-        $capability = $item->product?->capability('subscribable');
-        $config = is_array($capability?->config) ? $capability->config : [];
-        $cycles = array_values(array_filter(
-            (array) ($plan['billing_cycles'] ?? []),
-            static fn (mixed $cycle): bool => is_array($cycle),
-        ));
-
-        $regular = null;
-        $trial = null;
-        foreach ($cycles as $cycle) {
-            $tenure = strtoupper((string) ($cycle['tenure_type'] ?? ''));
-            if ($tenure === 'REGULAR' && $regular === null) {
-                $regular = $cycle;
-            }
-            if ($tenure === 'TRIAL' && $trial === null) {
-                $trial = $cycle;
-            }
-        }
-        if (! is_array($regular)) {
-            return false;
-        }
-
-        $price = is_array($regular['pricing_scheme']['fixed_price'] ?? null)
-            ? $regular['pricing_scheme']['fixed_price']
-            : [];
-        if (strtoupper((string) ($price['currency_code'] ?? '')) !== strtoupper($currency)) {
-            return false;
-        }
-        try {
-            if (MoneyFormatter::minorFromMajorInput((string) ($price['value'] ?? ''), $currency) !== $amount) {
-                return false;
-            }
-        } catch (\Throwable) {
-            return false;
-        }
-
-        $expectedInterval = match ((string) ($config['interval'] ?? 'month')) {
-            'day' => 'DAY',
-            'week' => 'WEEK',
-            'year' => 'YEAR',
-            default => 'MONTH',
-        };
-        $expectedCount = max(1, (int) ($config['interval_count'] ?? 1));
-        if (strtoupper((string) ($regular['frequency'] ?? $regular['interval_unit'] ?? '')) !== $expectedInterval
-            || (int) ($regular['frequency_interval'] ?? $regular['interval_count'] ?? 1) !== $expectedCount
-        ) {
-            return false;
-        }
-
-        $trialDays = max(0, (int) ($config['trial_days'] ?? 0));
-        if ($trialDays === 0) {
-            return $trial === null;
-        }
-
-        return is_array($trial)
-            && strtoupper((string) ($trial['frequency'] ?? $trial['interval_unit'] ?? '')) === 'DAY'
-            && (int) ($trial['frequency_interval'] ?? $trial['interval_count'] ?? 0) === $trialDays;
     }
 
     private function renewalModeFor(Order $order): ?string
@@ -778,6 +640,8 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
         } catch (PayPalProviderException $exception) {
             throw $exception;
         }
+
+        $this->rememberAuthorizationForOrderId($orderId, $order);
 
         return PayPalStatusMapper::fromOrder($order);
     }
@@ -882,9 +746,185 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
             && in_array($host, ['api-m.paypal.com', 'api-m.sandbox.paypal.com', 'api.paypal.com', 'api.sandbox.paypal.com'], true);
     }
 
-    private function isProviderSubscriptionId(string $value): bool
+    private function authorizationFor(PaymentInitiation $request): ?PayPalPaymentAuthorization
     {
-        return preg_match('/^I-[A-Za-z0-9_-]+$/', trim($value)) === 1;
+        return $this->authorizationRow(
+            $request->order->customer_id !== null ? (int) $request->order->customer_id : null,
+            (string) $request->order->customer_email,
+        );
+    }
+
+    private function authorizationRow(?int $customerId, string $customerEmail): ?PayPalPaymentAuthorization
+    {
+        if (! Schema::hasTable('paypal_payment_authorizations')) {
+            return null;
+        }
+
+        if ($customerId !== null) {
+            $row = PayPalPaymentAuthorization::query()->where('customer_id', $customerId)->first();
+            if ($row !== null) {
+                return $row;
+            }
+        }
+
+        if ($customerEmail === '') {
+            return null;
+        }
+
+        return PayPalPaymentAuthorization::query()
+            ->where('customer_email', $customerEmail)
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     */
+    private function rememberAuthorizationFromOrder(Payment $payment, array $order): void
+    {
+        $vault = $this->vaultDetailsFromOrder($order);
+        $tokenId = $this->firstString($vault, ['id']);
+        $status = strtoupper((string) ($vault['status'] ?? ''));
+        if ($tokenId === null || ($status !== '' && $status !== 'VAULTED')) {
+            return;
+        }
+
+        $payment->loadMissing('order');
+        $orderModel = $payment->order;
+        if ($orderModel === null) {
+            return;
+        }
+
+        $customer = is_array($vault['customer'] ?? null) ? $vault['customer'] : [];
+        $paypalCustomerId = $this->firstString($customer, ['id']);
+        $merchantCustomerId = $this->firstString(
+            is_array($order['payment_source']['paypal']['attributes']['customer'] ?? null)
+                ? $order['payment_source']['paypal']['attributes']['customer']
+                : [],
+            ['merchant_customer_id'],
+        );
+
+        $this->storeAuthorization(
+            $orderModel->customer_id !== null ? (int) $orderModel->customer_id : null,
+            (string) $orderModel->customer_email,
+            $paypalCustomerId,
+            $merchantCustomerId,
+            $tokenId,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     */
+    private function rememberAuthorizationForOrderId(string $orderId, array $order): void
+    {
+        $attempt = PaymentAttempt::query()
+            ->where('gateway_id', self::ID)
+            ->where('external_id', $orderId)
+            ->with('payment.order')
+            ->first();
+        if ($attempt?->payment instanceof Payment) {
+            $this->rememberAuthorizationFromOrder($attempt->payment, $order);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $resource
+     */
+    private function rememberAuthorizationFromVaultResource(array $resource): void
+    {
+        $tokenId = $this->firstString($resource, ['id']);
+        if ($tokenId === null) {
+            return;
+        }
+
+        $customer = is_array($resource['customer'] ?? null) ? $resource['customer'] : [];
+        $merchantCustomerId = $this->firstString($customer, ['merchant_customer_id']);
+        $customerId = is_numeric($merchantCustomerId) ? (int) $merchantCustomerId : null;
+        $email = $customerId === null ? ($merchantCustomerId ?? '') : '';
+        $paypalCustomerId = $this->firstString($customer, ['id']);
+        $this->storeAuthorization($customerId, $email, $paypalCustomerId, $merchantCustomerId, $tokenId);
+    }
+
+    private function storeAuthorization(
+        ?int $customerId,
+        string $customerEmail,
+        ?string $paypalCustomerId,
+        ?string $merchantCustomerId,
+        string $tokenId,
+    ): void {
+        if (! Schema::hasTable('paypal_payment_authorizations') || $tokenId === '') {
+            return;
+        }
+
+        $customerEmail = trim($customerEmail);
+        if ($customerId === null && $customerEmail === '' && $merchantCustomerId !== null) {
+            $customerEmail = trim($merchantCustomerId);
+        }
+        if ($customerId === null && $customerEmail === '') {
+            return;
+        }
+
+        $hash = hash('sha256', $tokenId);
+        $row = PayPalPaymentAuthorization::query()->where('payment_token_hash', $hash)->first()
+            ?? $this->authorizationRow($customerId, $customerEmail);
+        if ($row === null) {
+            $row = new PayPalPaymentAuthorization;
+        }
+
+        $row->customer_id = $customerId ?? $row->customer_id;
+        $row->customer_email = $customerEmail !== '' ? $customerEmail : $row->customer_email;
+        $row->paypal_customer_id = $paypalCustomerId ?? $row->paypal_customer_id;
+        $row->payment_token_id = $tokenId;
+        $row->payment_token_hash = $hash;
+        $row->status = 'active';
+        $row->last_verified_at = now();
+        $row->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     * @return array<string, mixed>
+     */
+    private function vaultDetailsFromOrder(array $order): array
+    {
+        $paypal = is_array($order['payment_source']['paypal'] ?? null)
+            ? $order['payment_source']['paypal']
+            : [];
+        $attributes = is_array($paypal['attributes'] ?? null) ? $paypal['attributes'] : [];
+
+        return is_array($attributes['vault'] ?? null) ? $attributes['vault'] : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $resource
+     */
+    private function vaultIdFromResource(array $resource): ?string
+    {
+        $vault = is_array($resource['payment_source']['paypal']['attributes']['vault'] ?? null)
+            ? $resource['payment_source']['paypal']['attributes']['vault']
+            : (is_array($resource['attributes']['vault'] ?? null) ? $resource['attributes']['vault'] : []);
+
+        return $this->firstString($vault, ['id'])
+            ?? ($this->firstString($resource, ['id']) ?: null);
+    }
+
+    private function revokeAuthorizationByToken(string $tokenId): void
+    {
+        if (! Schema::hasTable('paypal_payment_authorizations') || $tokenId === '') {
+            return;
+        }
+
+        $row = PayPalPaymentAuthorization::query()
+            ->where('payment_token_hash', hash('sha256', $tokenId))
+            ->first();
+        if ($row === null) {
+            return;
+        }
+
+        $row->status = 'revoked';
+        $row->last_verified_at = now();
+        $row->save();
     }
 
     /**
@@ -914,16 +954,6 @@ final class PayPalPaymentGateway implements HandlesProviderRefundEvents, Manages
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $resource
-     */
-    private function nextBillingAt(array $resource): ?string
-    {
-        $billingInfo = is_array($resource['billing_info'] ?? null) ? $resource['billing_info'] : [];
-        return $this->firstString($billingInfo, ['next_billing_time'])
-            ?? $this->firstString($resource, ['next_billing_time']);
     }
 
     /**

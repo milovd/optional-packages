@@ -53,40 +53,9 @@ final class HttpPayPalApi implements PayPalApi
         );
     }
 
-    public function createSubscription(array $payload, ?string $idempotencyKey = null): array
+    public function deletePaymentToken(string $paymentTokenId): array
     {
-        return $this->authorized('POST', '/v1/billing/subscriptions', $payload, $idempotencyKey);
-    }
-
-    public function getSubscription(string $id): array
-    {
-        return $this->authorized('GET', '/v1/billing/subscriptions/'.rawurlencode($id));
-    }
-
-    public function getPlan(string $id): array
-    {
-        return $this->authorized('GET', '/v1/billing/plans/'.rawurlencode($id));
-    }
-
-    public function suspendSubscription(string $id, string $reason): void
-    {
-        $this->authorized('POST', '/v1/billing/subscriptions/'.rawurlencode($id).'/suspend', [
-            'reason' => $reason,
-        ]);
-    }
-
-    public function activateSubscription(string $id, string $reason): void
-    {
-        $this->authorized('POST', '/v1/billing/subscriptions/'.rawurlencode($id).'/activate', [
-            'reason' => $reason,
-        ]);
-    }
-
-    public function cancelSubscription(string $id, string $reason): void
-    {
-        $this->authorized('POST', '/v1/billing/subscriptions/'.rawurlencode($id).'/cancel', [
-            'reason' => $reason,
-        ]);
+        return $this->authorized('DELETE', '/v3/vault/payment-tokens/'.rawurlencode($paymentTokenId));
     }
 
     public function verifyWebhookSignature(array $payload): bool
@@ -122,6 +91,7 @@ final class HttpPayPalApi implements PayPalApi
             $response = match (strtoupper($method)) {
                 'GET' => $pending->get($url),
                 'POST' => $pending->post($url, $body),
+                'DELETE' => $pending->delete($url),
                 default => throw PayPalProviderException::failed('paypal::messages.errors.provider_failed'),
             };
         } catch (PayPalProviderException $exception) {
