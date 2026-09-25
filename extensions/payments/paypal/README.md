@@ -1,21 +1,25 @@
 # PayPal payment extension
 
-PayPal Checkout voor Agovena met:
+PayPal Checkout for Agovena with:
 
-- Redirect checkout via Orders v2 voor eenmalige payments
-- Orders v2 vaulting bij automatische recurring checkout
-- Merchant-initiated recurring charges met een versleuteld opgeslagen PayPal vault ID
-- Automatische capture na een geverifieerde `CHECKOUT.ORDER.APPROVED` webhook
-- Webhook signature verification via PayPal `verify-webhook-signature`
-- Full en partial capture refunds
-- Idempotency via `PayPal-Request-Id` op muterende provider requests
-- Eén PayPal checkoutoptie met de extension-owned `ag:payment-method/paypal` icon
-- Revocation van lokale recurring authorization bij vault-token deletion events
-- Onbekende provideruitkomsten naar payment- of refund-reconciliation
-- Secrets in extension settings, encrypted wanneer als secret gemarkeerd
+- One storefront checkout option using `ag:payment-method/paypal`
+- The official PayPal SVG asset in the Core payment-method catalog
+- PayPal's official JS SDK popup overlay for storefront checkout
+- `onApprove`, `onCancel` and `onError` return handling
+- Orders v2 for one-time payments and the first automatic recurring payment
+- Vault storage with `store_in_vault = ON_SUCCESS`
+- Core-managed merchant-initiated renewals using `vault_id` and `stored_credential`
+- Capture after verified `CHECKOUT.ORDER.APPROVED` webhook processing
+- Full and partial refunds by PayPal capture ID
+- Signed webhook verification through PayPal `verify-webhook-signature`
+- Idempotency through `PayPal-Request-Id`
+- Local authorization revocation after Vault token deletion events
+- Reconciliation for unknown provider outcomes
 
-Automatische recurring orders slaan de PayPal funding source op tijdens de eerste checkout met `store_in_vault = ON_SUCCESS`. Renewals gebruiken de opgeslagen vault authorization met `stored_credential` en worden door Agovena Core gepland en uitgevoerd. Er is geen vooraf aangemaakte PayPal Billing Plan nodig.
+The browser overlay is provider-owned. Agovena does not render card fields and does not treat the browser callback as payment proof. Verified webhooks and provider reconciliation remain authoritative. API clients without an Agovena storefront access token retain the direct PayPal approval redirect.
 
-Configureer webhook URL: `/webhooks/payments/paypal`
+Automatic recurring orders request Vault storage during the first checkout. Later renewals use the encrypted authorization stored by the extension and are scheduled by Agovena Core. No PayPal Billing Plan ID or `subscription_plan_id` is required.
 
-Externe PayPal Sandbox- of live approval, webhook delivery, vaulting, refunds en renewals blijven deployment-verificatiestappen. Lokale tests controleren de adaptercontracten, idempotency, statusmapping, token persistence en failure states, maar vormen geen bewijs van een live provideraccount.
+Configure the payment webhook at `/webhooks/payments/paypal`.
+
+External PayPal Sandbox or live approval, webhook delivery, Vault creation, refunds and renewals remain deployment verification steps. Local tests cover adapter contracts, overlay routing, idempotency, status mapping, token persistence and failure states, but they do not prove a live provider account.

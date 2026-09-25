@@ -21,11 +21,14 @@ final class PayPalServiceProvider extends ServiceProvider
                 $app->bound(PayPalApi::class) ? $app->make(PayPalApi::class) : null,
             );
         });
+
+        require_once dirname(__DIR__).DIRECTORY_SEPARATOR.'routes'.DIRECTORY_SEPARATOR.'web.php';
     }
 
     public function boot(): void
     {
         $this->loadTranslationsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'lang', 'paypal');
+        $this->loadViewsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'resources'.DIRECTORY_SEPARATOR.'views', 'paypal');
         $this->loadMigrationsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'database'.DIRECTORY_SEPARATOR.'migrations');
     }
 

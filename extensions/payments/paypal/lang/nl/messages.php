@@ -6,6 +6,15 @@ return [
     'gateway' => [
         'label' => 'PayPal',
     ],
+    'checkout' => [
+        'title' => 'PayPal-checkout',
+        'loading' => 'PayPal-checkout laden...',
+        'approval_received' => 'Betalingsgoedkeuring ontvangen. Je betaling wordt bevestigd...',
+        'missing_client_id' => 'PayPal-checkout is niet geconfigureerd.',
+        'missing_order' => 'Deze PayPal-checkout is niet meer beschikbaar.',
+        'javascript_required' => 'JavaScript is vereist om PayPal-checkout te openen.',
+        'error' => 'PayPal-checkout kon niet worden geladen. Probeer opnieuw of kies een andere betaalmethode.',
+    ],
     'settings' => [
         'client_id' => 'Client-ID',
         'client_id_help' => 'REST app client-ID uit het PayPal developer dashboard. Webhook-URL: /webhooks/payments/paypal',

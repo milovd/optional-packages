@@ -6,6 +6,15 @@ return [
     'gateway' => [
         'label' => 'PayPal',
     ],
+    'checkout' => [
+        'title' => 'PayPal checkout',
+        'loading' => 'Loading PayPal checkout...',
+        'approval_received' => 'Payment approval received. Confirming your payment...',
+        'missing_client_id' => 'PayPal checkout is not configured.',
+        'missing_order' => 'This PayPal checkout is no longer available.',
+        'javascript_required' => 'JavaScript is required to open PayPal checkout.',
+        'error' => 'PayPal checkout could not be loaded. Try again or choose another payment method.',
+    ],
     'settings' => [
         'client_id' => 'Client ID',
         'client_id_help' => 'REST app client ID from the PayPal developer dashboard. Webhook URL: /webhooks/payments/paypal',

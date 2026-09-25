@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Extensions\PayPal;
 
 use App\Agovena\Extensions\ExtensionSettingsRepository;
+use App\Agovena\Orders\StorefrontOrderAccess;
 use App\Agovena\Payments\ApplyNormalizedPaymentStatus;
 use App\Agovena\Payments\CheckoutPaymentMethod;
 use App\Agovena\Payments\Contracts\ChargesRecurringPayments;
@@ -30,6 +31,7 @@ use App\Models\PaymentAttempt;
 use App\Support\MoneyFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
 final class PayPalPaymentGateway implements ChargesRecurringPayments, HandlesProviderRefundEvents, OffersCheckoutMethods, OffersReusablePaymentAuthorization, PaymentGateway, SynchronizesPayments, ValidatesWebhookPayload
@@ -173,11 +175,15 @@ final class PayPalPaymentGateway implements ChargesRecurringPayments, HandlesPro
             return PaymentInitiationResult::failed(__('paypal::messages.errors.create_failed'));
         }
 
+        $checkoutUrl = $this->storefrontCheckoutUrl($externalId, $request->returnUrl) ?? $url;
+
         return PaymentInitiationResult::redirect(
-            url: $url,
+            url: $checkoutUrl,
             externalId: $externalId,
             metadata: [
                 'provider_status' => (string) ($order['status'] ?? 'CREATED'),
+                'provider_checkout_url' => $url,
+                'checkout_surface' => $checkoutUrl === $url ? 'redirect' : 'overlay',
             ],
         );
     }
@@ -682,6 +688,27 @@ final class PayPalPaymentGateway implements ChargesRecurringPayments, HandlesPro
         ]));
     }
 
+    private function storefrontCheckoutUrl(string $externalId, string $returnUrl): ?string
+    {
+        $query = parse_url($returnUrl, PHP_URL_QUERY);
+        if (! is_string($query) || $query === '') {
+            return null;
+        }
+
+        parse_str($query, $parameters);
+        $access = $parameters[StorefrontOrderAccess::QUERY_KEY] ?? null;
+        if (! is_string($access) || trim($access) === '') {
+            return null;
+        }
+
+        $this->ensureCheckoutRoute();
+
+        return url('/paypal/checkout?'.http_build_query([
+            '_porder' => $externalId,
+            StorefrontOrderAccess::QUERY_KEY => $access,
+        ]));
+    }
+
     private function client(): ?PayPalApi
     {
         if ($this->api !== null) {
@@ -693,6 +720,27 @@ final class PayPalPaymentGateway implements ChargesRecurringPayments, HandlesPro
         }
 
         return new HttpPayPalApi($this->settings);
+    }
+
+    public function clientSideId(): ?string
+    {
+        return $this->clientId();
+    }
+
+    public function isSandbox(): bool
+    {
+        return filter_var($this->settings->get('paypal', 'sandbox', true), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function ensureCheckoutRoute(): void
+    {
+        if (Route::has('paypal.checkout')) {
+            return;
+        }
+
+        Route::get('/paypal/checkout', PayPalCheckoutPage::class)
+            ->middleware('web')
+            ->name('paypal.checkout');
     }
 
     private function clientId(): ?string
