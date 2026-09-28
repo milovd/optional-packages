@@ -1,7 +1,5 @@
 vendor/
 node_modules/
-build/
-dist/
 
 .env
 .env.*
@@ -14,9 +12,7 @@ auth.json
 
 .phpunit.result.cache
 .phpunit.cache/
-.php-cs-fixer.cache
 .phpstan.cache/
-.psalm/
 coverage/
 
 *.sqlite
@@ -35,16 +31,4 @@ coverage/
 Thumbs.db
 Desktop.ini
 
-npm-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.cache/
-.vite/
-.turbo/
-
 *.log
-tmp/
-test-results/
-playwright-report/
-blob-report/
-playwright/.cache/
