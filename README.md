@@ -1,75 +1,28 @@
 # Agovena Optional Packages
 
-Official monorepo of optional **Modules** and **Extensions** for [Agovena](https://github.com/milovd/Agovena) - the open-source modular commerce platform.
+Official Modules and Extensions for [Agovena](https://github.com/milovd/Agovena), an open-source, self-hosted and modular commerce platform.
 
-Agovena Core stays generic. Install only the capabilities your shop needs.
+This repository contains first-party packages that add optional commerce capabilities and provider integrations without making them part of Agovena Core.
 
-## Repository layout
+## Packages
 
-```text
-optional-packages/
-├── modules/
-│ ├── downloads/
-│ ├── digital-delivery/
-│ ├── domains/
-│ ├── provisioning/
-│ └── events/
-└── extensions/
-    ├── payments/
-    │   ├── mollie/
-    │   ├── stripe/
-    │   ├── paypal/
-    │   ├── paddle/
-    │   └── tebex/
-    ├── domains/
-    │   ├── cloudflare-domain/
-    │   └── namecheap-domain/
-    ├── provisioning/
-    │   ├── pterodactyl/
-    │   ├── proxmox/
-    │   ├── cpanel/
-    │   ├── convoy/
-    │   ├── directadmin/
-    │   ├── enhance/
-    │   ├── plesk/
-    │   ├── virtfusion/
-    │   └── virtualizor/
-    └── shipping/
-        └── postnl/
-```
+- **Modules** add capabilities such as downloads, digital delivery, domains, events and provisioning.
+- **Extensions** connect providers for payments, domains, provisioning and shipping.
 
-Package identity comes from each package manifest (`module.json` or `extension.json` `id` field), not from the folder path.
+Each package declares its identity and contract in a `module.json` or `extension.json` manifest.
 
-## Installation (from Agovena Core)
+## Using the packages
 
-1. Set in Agovena `.env`:
+Install and manage packages from Agovena Core through the Admin interface. The [Agovena documentation](https://agovena.com/docs) covers installation, package management and operations.
 
-   ```env
-   AGOVENA_PACKAGES_MONOREPO_URL=https://github.com/milovd/optional-packages
-   ```
+For architecture and local development, see the [developer documentation](https://agovena.com/development). Available first-party packages are listed in the [Agovena Marketplace](https://agovena.com/marketplace).
 
-2. In **Admin → Modules** or **Admin → Extensions**, use **Install** on an available package.
+## Contributing
 
-3. Agovena clones this repository (cached under `storage/app/packages/monorepo-cache/`), copies the mapped subdirectory into `storage/app/packages/modules/{id}` or `storage/app/packages/extensions/{id}`, registers autoloading, and runs the package lifecycle (`install` → `enable`).
+Keep package code, manifests and documentation within the package boundary. Changes that affect the shared package contract belong in the [Agovena Core repository](https://github.com/milovd/Agovena).
 
-The catalog includes the Domains module, one integrated Cloudflare domain extension for Cloudflare Registrar plus DNS management, one separate Namecheap domain extension for registration and renewal management, five payment gateways, nine provisioning adapters, and the PostNL shipping adapter. Paddle and Tebex are marked production-ready for their supported hosted-checkout contracts, including the required webhook configuration and provider-owned payment surfaces. Other provider manifests remain explicitly non-production-ready until their corresponding acceptance checklists have been completed.
-
-## Updates
-
-When a new version is tagged or merged to `main`, use **Update** in Admin on an installed monorepo package. Agovena re-fetches the configured git ref (default `main` or a semver tag) and refreshes the materialized copy.
-
-## Development
-
-Clone this repo beside Agovena Core for local development without repeated git checkouts:
-
-```env
-AGOVENA_OPTIONAL_PACKAGES_PATH=../optional-packages
-```
-
-Core will discover packages from that path via `extra_module_paths` / `extra_extension_paths`.
+Please open focused issues and pull requests with the affected package clearly identified.
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
-
-Upstream Core documents third-party FX/VAT data sources in [Agovena ATTRIBUTION.md](https://github.com/milovd/Agovena/blob/main/ATTRIBUTION.md).
+MIT. See [LICENSE](LICENSE).
