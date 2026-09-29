@@ -7,6 +7,8 @@ namespace Agovena\Modules\Domains;
 use App\Agovena\Extensions\RuntimeRegistry;
 use App\Agovena\Modules\Contracts\Module;
 use Illuminate\Support\ServiceProvider;
+use Agovena\Modules\Domains\Providers\DemoDnsProvider;
+use Agovena\Modules\Domains\Providers\DemoDomainRegistrar;
 
 final class DomainsServiceProvider extends ServiceProvider
 {
@@ -22,8 +24,12 @@ final class DomainsServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'domains');
-        app(RuntimeRegistry::class)->register(app(DomainRegistrarRegistry::class));
-        app(RuntimeRegistry::class)->register(app(DomainDnsProviderRegistry::class));
+        $registrars = app(DomainRegistrarRegistry::class);
+        $dnsProviders = app(DomainDnsProviderRegistry::class);
+        $registrars->register(new DemoDomainRegistrar());
+        $dnsProviders->register(new DemoDnsProvider());
+        app(RuntimeRegistry::class)->register($registrars);
+        app(RuntimeRegistry::class)->register($dnsProviders);
     }
 
     public function module(): Module

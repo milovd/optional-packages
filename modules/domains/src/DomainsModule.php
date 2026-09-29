@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Agovena\Modules\Domains;
 
 use Agovena\Modules\Domains\Http\Livewire\Admin\RegistrationsIndex as AdminRegistrationsIndex;
+use Agovena\Modules\Domains\Http\Livewire\Customer\DomainShow;
 use Agovena\Modules\Domains\Http\Livewire\Customer\RegistrationsIndex as CustomerRegistrationsIndex;
+use Agovena\Modules\Domains\Http\Livewire\Storefront\DomainSearch;
 use Agovena\Modules\Domains\Listeners\CreateDomainRegistrationsWhenOrderPaid;
+use Agovena\Modules\Domains\Listeners\FulfillDomainRegistrationsWhenOrderPaid;
+use Agovena\Modules\Domains\Listeners\ValidateDomainOrderPreflight;
 use Agovena\Modules\Domains\Models\DomainRegistration;
 use App\Agovena\Admin\NavigationItem;
 use App\Agovena\Catalog\Capabilities\ProductCapabilityDefinition;
@@ -15,6 +19,7 @@ use App\Agovena\Customer\AccountOverviewCard;
 use App\Agovena\Modules\Contracts\Module;
 use App\Agovena\Modules\ModuleContext;
 use App\Events\OrderPaid;
+use App\Events\OrderPreflight;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Route;
 
@@ -78,12 +83,19 @@ final class DomainsModule implements Module
         );
 
         $context->listen(OrderPaid::class, CreateDomainRegistrationsWhenOrderPaid::class);
+        $context->listen(OrderPaid::class, FulfillDomainRegistrationsWhenOrderPaid::class);
+        $context->listen(OrderPreflight::class, ValidateDomainOrderPreflight::class);
+
+        $context->storefrontRoutes(function (): void {
+            Route::get('/domains', DomainSearch::class)->name('domains');
+        });
 
         $context->adminRoutes(function (): void {
             Route::get('/domains', AdminRegistrationsIndex::class)->name('domains.index');
         });
         $context->customerRoutes(function (): void {
             Route::get('/domains', CustomerRegistrationsIndex::class)->name('domains');
+            Route::get('/domains/{registration}', DomainShow::class)->name('domains.show');
         });
     }
 }

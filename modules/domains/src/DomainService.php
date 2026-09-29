@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Modules\Domains;
 
 use Agovena\Modules\Domains\Contracts\DomainRegistrar;
+use Agovena\Modules\Domains\Contracts\DomainDnsProvider;
 use Agovena\Modules\Domains\Enums\DomainRegistrationStatus;
 use Agovena\Modules\Domains\Models\DomainRegistration;
 use App\Models\Order;
@@ -158,6 +159,45 @@ final class DomainService
         return $registration->fresh() ?? $registration;
     }
 
+    /** @return list<array<string, mixed>> */
+    public function dnsRecords(DomainRegistration $registration): array
+    {
+        return $this->dnsProviderFor($registration, 'records')
+            ->listRecords($registration->fresh() ?? $registration);
+    }
+
+    /** @param array<string, mixed> $record @return array<string, mixed> */
+    public function upsertDnsRecord(DomainRegistration $registration, array $record): array
+    {
+        return $this->dnsProviderFor($registration, 'records')
+            ->upsertRecord($registration->fresh() ?? $registration, $record);
+    }
+
+    /** @return array<string, mixed> */
+    public function deleteDnsRecord(DomainRegistration $registration, string $recordReference): array
+    {
+        return $this->dnsProviderFor($registration, 'records')
+            ->deleteRecord($registration->fresh() ?? $registration, $recordReference);
+    }
+
+    private function dnsProviderFor(DomainRegistration $registration, string $capability): DomainDnsProvider
+    {
+        $key = trim((string) $registration->dns_provider_key);
+        if ($key === '') {
+            throw new RuntimeException('No DNS provider is configured for this domain.');
+        }
+
+        $provider = $this->dnsProviders->get($key);
+        if ($provider === null) {
+            throw new RuntimeException('DNS provider ['.$key.'] is not available.');
+        }
+        if (! in_array($capability, $provider->capabilities(), true)) {
+            throw new RuntimeException('DNS provider ['.$key.'] does not support '.$capability.'.');
+        }
+
+        return $provider;
+    }
+
     private function registrarFor(DomainRegistration $registration, string $capability): DomainRegistrar
     {
         $key = trim((string) ($registration->registrar_key ?: $registration->provider_key));
@@ -247,8 +287,7 @@ final class DomainService
             return null;
         }
 
-        $domain = strtolower(trim($value));
-        return $domain !== '' ? rtrim($domain, '.') : null;
+        return DomainName::normalize($value);
     }
 
     private function generateNumber(): string
