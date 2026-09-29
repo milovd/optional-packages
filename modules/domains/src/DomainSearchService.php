@@ -17,7 +17,7 @@ final class DomainSearchService
     ) {}
 
     /** @return array<string, mixed> */
-    public function search(string $query): array
+    public function search(string $query, ?int $productId = null): array
     {
         $domain = DomainName::normalize($query);
         if ($domain === null) {
@@ -26,7 +26,7 @@ final class DomainSearchService
             ]);
         }
 
-        $product = $this->domainProduct();
+        $product = $this->domainProduct($productId);
         if ($product === null) {
             throw ValidationException::withMessages([
                 'query' => __('domains::storefront.unavailable_configuration'),
@@ -54,13 +54,13 @@ final class DomainSearchService
     }
 
     /** @param array<string, mixed> $result */
-    public function issueSelection(array $result): ?string
+    public function issueSelection(array $result, ?int $productId = null): ?string
     {
         if (! ($result['available'] ?? false) || ! is_string($result['domain'] ?? null)) {
             return null;
         }
 
-        $product = $this->domainProduct();
+        $product = $this->domainProduct($productId);
         $domain = DomainName::normalize($result['domain']);
         if ($product === null || $domain === null) {
             return null;
@@ -99,12 +99,18 @@ final class DomainSearchService
     }
 
 
-    public function domainProduct(): ?Product
+    public function domainProduct(?int $productId = null): ?Product
     {
-        return Product::query()
+        $query = Product::query()
             ->with(['capabilities', 'currencyPrices'])
             ->where('status', 'active')
-            ->whereHas('capabilities', static fn ($query) => $query->where('capability', 'domain_registration'))
+            ->whereHas('capabilities', static fn ($query) => $query->where('capability', 'domain_registration'));
+
+        if ($productId !== null) {
+            $query->whereKey($productId);
+        }
+
+        return $query
             ->orderBy('id')
             ->first();
     }

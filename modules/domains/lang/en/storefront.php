@@ -3,6 +3,9 @@
 return [
     'title' => 'Find your domain',
     'lede' => 'Search availability, choose a domain, and continue directly to checkout.',
+    'product_eyebrow' => 'Domain service',
+    'product_title' => 'Check domain availability',
+    'product_lede' => 'Search for an available domain before adding this registration product to checkout.',
     'search_label' => 'Domain name',
     'search_placeholder' => 'yourbrand.com',
     'search' => 'Search domain',
