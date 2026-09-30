@@ -1,0 +1,31 @@
+<?php
+
+return [
+    'title' => 'Vind je domein',
+    'lede' => 'Controleer beschikbaarheid, kies een domein en ga rechtstreeks verder naar checkout.',
+    'product_eyebrow' => 'Domeindienst',
+    'product_title' => 'Controleer domeinbeschikbaarheid',
+    'product_lede' => 'Zoek een beschikbaar domein voordat je dit registratieproduct aan checkout toevoegt.',
+    'configuration_title' => ':product configureren',
+    'configuration_lede' => 'Zoek je domein, kies een extensie en bekijk de actuele prijs voordat je het aan je winkelmand toevoegt.',
+    'search_label' => 'Domeinnaam',
+    'search_placeholder' => 'jouwmerk.nl',
+    'search' => 'Domein zoeken',
+    'requested' => 'Je zoekopdracht',
+    'available' => 'Beschikbaar',
+    'unavailable' => 'Niet beschikbaar',
+    'alternatives' => 'Beschikbare alternatieven',
+    'select' => 'Domein selecteren',
+    'checkout_note' => 'Registratie en DNS-beheer worden uitgevoerd na een geslaagde demobetaling.',
+    'demo_note' => 'Demomodus: er wordt geen echte registrar-, DNS- of betaalprovider aangeroepen.',
+    'no_alternatives' => 'Er zijn geen beschikbare alternatieven gevonden voor deze zoekopdracht.',
+    'added_to_checkout' => 'Domein geselecteerd. Ga verder naar checkout.',
+    'validation' => [
+        'domain' => 'Vul een geldige domeinnaam in, bijvoorbeeld jouwmerk.nl.',
+        'selection_required' => 'Selecteer eerst een domein via de domeinzoeker.',
+        'search_again' => 'Deze domeinkeuze is verlopen. Zoek opnieuw voordat je afrekent.',
+        'no_longer_available' => ':domain is niet meer beschikbaar. Zoek opnieuw naar een ander domein.',
+        'price_changed' => 'De prijs voor :domain is gewijzigd. Zoek opnieuw voor een nieuwe offerte.',
+    ],
+    'unavailable_configuration' => 'Domein zoeken is nog niet ingesteld. Vraag een administrator om een domeinproduct en registrar te configureren.',
+];

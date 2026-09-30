@@ -18,8 +18,8 @@ final class ValidateDomainOrderPreflight
     public function handle(OrderPreflight $event): void
     {
         foreach ($event->lines as $line) {
-            $product = $this->search->domainProduct();
-            if ($product === null || $product->id !== $line->productId) {
+            $product = $this->search->domainProduct($line->productId);
+            if ($product === null) {
                 continue;
             }
 
@@ -37,24 +37,25 @@ final class ValidateDomainOrderPreflight
                 ]);
             }
 
-            $quoteExists = false;
-            foreach ((array) session()->get('domains.quotes', []) as $quote) {
-                if (is_array($quote) && ($quote['domain'] ?? null) === $domain && (int) ($quote['product_id'] ?? 0) === $product->id && (int) ($quote['expires_at'] ?? 0) >= now()->timestamp) {
-                    $quoteExists = true;
-                    break;
-                }
-            }
-
-            if (! $quoteExists) {
+            $quote = $this->search->quoteFor($product, $domain);
+            if ($quote === null) {
                 throw ValidationException::withMessages([
                     'cart' => __('domains::storefront.validation.search_again'),
                 ]);
             }
 
-            $result = $this->search->search($domain)['requested'];
+            $result = $this->search->search($domain, $product->id)['requested'];
             if (! ($result['available'] ?? false)) {
                 throw ValidationException::withMessages([
                     'cart' => __('domains::storefront.validation.no_longer_available', ['domain' => $domain]),
+                ]);
+            }
+
+            if ((int) ($result['price_minor'] ?? -1) !== (int) $quote['price_minor']
+                || (string) ($result['currency'] ?? '') !== (string) $quote['currency']
+            ) {
+                throw ValidationException::withMessages([
+                    'cart' => __('domains::storefront.validation.price_changed', ['domain' => $domain]),
                 ]);
             }
         }

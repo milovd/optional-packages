@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agovena\Modules\Domains;
 
 use App\Models\Product;
+use App\Agovena\Money\CurrencyConverter;
 use App\Support\MoneyFormatter;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
@@ -14,6 +15,7 @@ final class DomainSearchService
 {
     public function __construct(
         private readonly DomainRegistrarRegistry $registrars,
+        private readonly CurrencyConverter $converter,
     ) {}
 
     /** @return array<string, mixed> */
@@ -76,8 +78,8 @@ final class DomainSearchService
         session()->put('domains.quotes.'.$token, [
             'domain' => $domain,
             'product_id' => $product->id,
-            'price_minor' => $product->price_amount,
-            'currency' => $product->currency,
+            'price_minor' => $check['price_minor'],
+            'currency' => $check['currency'],
             'registrar_key' => $config['registrar_key'],
             'dns_provider_key' => $config['dns_provider_key'],
             'expires_at' => now()->addMinutes(10)->timestamp,
@@ -98,6 +100,54 @@ final class DomainSearchService
         return $selection;
     }
 
+    /** @return array<string, mixed>|null */
+    public function quoteFor(Product $product, string $domain): ?array
+    {
+        $domain = DomainName::normalize($domain);
+        if ($domain === null) {
+            return null;
+        }
+
+        $latest = null;
+        $latestExpiry = -1;
+
+        foreach ((array) session()->get('domains.quotes', []) as $quote) {
+            if (! is_array($quote)
+                || ($quote['domain'] ?? null) !== $domain
+                || (int) ($quote['product_id'] ?? 0) !== $product->id
+                || (int) ($quote['expires_at'] ?? 0) < now()->timestamp
+            ) {
+                continue;
+            }
+
+            $priceMinor = $quote['price_minor'] ?? null;
+            if (is_string($priceMinor) && ctype_digit($priceMinor)) {
+                $priceMinor = (int) $priceMinor;
+            }
+            if (! is_int($priceMinor) || $priceMinor < 0) {
+                continue;
+            }
+
+            $currency = strtoupper(trim((string) ($quote['currency'] ?? '')));
+            if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+                continue;
+            }
+
+            $expiresAt = (int) ($quote['expires_at'] ?? 0);
+            if ($expiresAt < $latestExpiry) {
+                continue;
+            }
+
+            $latestExpiry = $expiresAt;
+            $latest = [
+                ...$quote,
+                'price_minor' => $priceMinor,
+                'currency' => $currency,
+            ];
+        }
+
+        return $latest;
+    }
 
     public function domainProduct(?int $productId = null): ?Product
     {
@@ -126,8 +176,26 @@ final class DomainSearchService
             'currency' => $product->currency,
             'reason' => 'provider_unavailable',
         ];
-        $available = (bool) ($result['available'] ?? false);
-        $priceMinor = $available ? $product->price_amount : null;
+        $providerPrice = $result['price_minor'] ?? null;
+        if (is_string($providerPrice) && ctype_digit($providerPrice)) {
+            $providerPrice = (int) $providerPrice;
+        }
+
+        $providerCurrency = strtoupper(trim((string) ($result['currency'] ?? '')));
+        $priceMinor = null;
+        if ((bool) ($result['available'] ?? false)
+            && is_int($providerPrice)
+            && $providerPrice >= 0
+            && preg_match('/^[A-Z]{3}$/', $providerCurrency) === 1
+        ) {
+            try {
+                $priceMinor = $this->converter->convert($providerPrice, $providerCurrency, $product->currency);
+            } catch (\Throwable) {
+                $priceMinor = null;
+            }
+        }
+
+        $available = (bool) ($result['available'] ?? false) && $priceMinor !== null;
 
         return [
             'domain' => $domain,
@@ -135,7 +203,7 @@ final class DomainSearchService
             'price_minor' => $priceMinor,
             'currency' => $product->currency,
             'price' => $priceMinor === null ? null : MoneyFormatter::format($priceMinor, $product->currency),
-            'reason' => $result['reason'] ?? null,
+            'reason' => $available ? ($result['reason'] ?? null) : ($result['reason'] ?? 'provider_price_unavailable'),
         ];
     }
 

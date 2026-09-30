@@ -6,6 +6,7 @@ namespace Agovena\Modules\Domains\Http\Livewire\Storefront;
 
 use Agovena\Modules\Domains\DomainSearchService;
 use App\Agovena\Cart\CartService;
+use App\Agovena\Catalog\GetStorefrontProduct;
 use App\Agovena\Theme\ThemeManager;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
@@ -18,12 +19,30 @@ final class DomainSearch extends Component
     #[Locked]
     public ?int $productId = null;
 
+    public int $quantity = 1;
+
+    public string $intent = 'cart';
+
+    public ?string $slug = null;
+
     /** @var array<string, mixed>|null */
     public ?array $result = null;
 
-    public function mount(?int $productId = null): void
+    public function mount(?int $productId = null, ?string $slug = null): void
     {
+        $this->slug = $slug;
+        if ($slug !== null) {
+            $product = app(GetStorefrontProduct::class)->handle($slug);
+            abort_unless($product->hasCapability('domain_registration'), 404);
+            $productId = $product->id;
+        }
+
         $this->productId = $productId;
+        $this->quantity = min(99, max(1, (int) request()->query('quantity', 1)));
+        $requestedIntent = request()->query('intent');
+        $this->intent = $requestedIntent === 'checkout' || ($requestedIntent === null && $this->productId === null)
+            ? 'checkout'
+            : 'cart';
     }
 
     public function search(DomainSearchService $domains): void
@@ -42,30 +61,33 @@ final class DomainSearch extends Component
             ]);
         }
 
-        $cart->add((int) $selection['product_id'], 1, [
+        $quantity = min(99, max(1, (int) $this->quantity));
+        $cart->add((int) $selection['product_id'], $quantity, [
             'domain_name' => (string) $selection['domain'],
             'dns_management' => true,
         ]);
         session()->flash('status', __('domains::storefront.added_to_checkout'));
-        $this->redirect(route('storefront.checkout'), navigate: true);
+        $target = $this->intent === 'checkout' ? 'storefront.checkout' : 'storefront.cart';
+        $this->redirect(route($target), navigate: true);
     }
 
-    public function render(ThemeManager $themes)
+    public function render(ThemeManager $themes, DomainSearchService $domains)
     {
         $theme = $themes->active();
+        $product = $this->productId !== null ? $domains->domainProduct($this->productId) : null;
 
         $view = view($theme->view('domains.search'), [
             'theme' => $theme,
             'accountSection' => null,
-            'embedded' => $this->productId !== null,
+            'embedded' => false,
+            'configuration' => $product !== null,
+            'product' => $product,
         ]);
 
-        if ($this->productId !== null) {
-            return $view;
-        }
-
         return $view->layout($theme->view('layouts.storefront'), [
-            'title' => __('domains::storefront.title'),
+            'title' => $product !== null
+                ? __('domains::storefront.configuration_title', ['product' => $product->name])
+                : __('domains::storefront.title'),
             'theme' => $theme,
         ]);
     }

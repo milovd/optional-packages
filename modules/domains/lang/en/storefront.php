@@ -6,6 +6,8 @@ return [
     'product_eyebrow' => 'Domain service',
     'product_title' => 'Check domain availability',
     'product_lede' => 'Search for an available domain before adding this registration product to checkout.',
+    'configuration_title' => 'Configure :product',
+    'configuration_lede' => 'Search for your domain, choose an extension, and review the current price before adding it to your cart.',
     'search_label' => 'Domain name',
     'search_placeholder' => 'yourbrand.com',
     'search' => 'Search domain',
@@ -23,6 +25,7 @@ return [
         'selection_required' => 'Select a domain from the domain search before checkout.',
         'search_again' => 'This domain selection expired. Search again before checkout.',
         'no_longer_available' => ':domain is no longer available. Search again for another domain.',
+        'price_changed' => 'The price for :domain changed. Search again to receive a new quote.',
     ],
     'unavailable_configuration' => 'Domain search is not configured yet. Ask an administrator to configure a domain product and registrar.',
 ];

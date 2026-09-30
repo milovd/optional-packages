@@ -12,6 +12,7 @@ use Agovena\Modules\Domains\Listeners\CreateDomainRegistrationsWhenOrderPaid;
 use Agovena\Modules\Domains\Listeners\FulfillDomainRegistrationsWhenOrderPaid;
 use Agovena\Modules\Domains\Listeners\ValidateDomainOrderPreflight;
 use Agovena\Modules\Domains\Models\DomainRegistration;
+use Agovena\Modules\Domains\Pricing\DomainProductPriceResolver;
 use App\Agovena\Admin\NavigationItem;
 use App\Agovena\Catalog\Capabilities\ProductCapabilityDefinition;
 use App\Agovena\Customer\AccountNavItem;
@@ -38,6 +39,7 @@ final class DomainsModule implements Module
             description: 'domains::admin.capabilities.domain_registration_help',
             providedByModule: $this->id(),
         ));
+        $context->productPricing()->register(app(DomainProductPriceResolver::class));
 
         $context->admin()->permission('domains.view', 'admin.permissions.domains.view');
         $context->admin()->permission('domains.manage', 'admin.permissions.domains.manage');
@@ -88,6 +90,7 @@ final class DomainsModule implements Module
 
         $context->storefrontRoutes(function (): void {
             Route::get('/domains', DomainSearch::class)->name('domains');
+            Route::get('/domains/products/{slug}/configure', DomainSearch::class)->name('domains.product.configure');
         });
 
         $context->adminRoutes(function (): void {
