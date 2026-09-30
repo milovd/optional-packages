@@ -21,6 +21,7 @@ final class DomainSearch extends Component
 
     public int $quantity = 1;
 
+    #[Locked]
     public string $intent = 'cart';
 
     public ?string $slug = null;
