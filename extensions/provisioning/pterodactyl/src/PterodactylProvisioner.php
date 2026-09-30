@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Agovena\Extensions\Pterodactyl;
 
+use App\Agovena\Catalog\Options\ConfigurableProductOptionContext;
+use App\Agovena\Catalog\Options\ConfigurableProductOptionDefinition;
 use App\Agovena\Extensions\ExtensionSettingDefinition;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
 use App\Agovena\Payments\HealthResult;
@@ -11,6 +13,7 @@ use App\Agovena\Provisioning\Contracts\ChecksProvisioningStock;
 use App\Agovena\Provisioning\Contracts\ChecksProvisioningStockVector;
 use App\Agovena\Provisioning\Contracts\ConfiguresProvisionedProducts;
 use App\Agovena\Provisioning\Contracts\ConfiguresProvisioningServers;
+use App\Agovena\Provisioning\Contracts\ProvidesConfigurableProductOptions;
 use App\Agovena\Provisioning\Contracts\ProvidesProvisioningCapacityRequirements;
 use App\Agovena\Provisioning\Contracts\Provisioner;
 use App\Agovena\Provisioning\Contracts\ProvisionerActions;
@@ -20,10 +23,13 @@ use App\Agovena\Provisioning\ProvisionerAction;
 use App\Agovena\Provisioning\ProvisionerPanelData;
 use App\Agovena\Provisioning\ProvisioningStockContext;
 use App\Agovena\Provisioning\ServiceInstanceInfo;
+use App\Enums\ProductOptionType;
 use App\Models\ProvisioningServer;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
-final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksProvisioningStockVector, ConfiguresProvisionedProducts, ConfiguresProvisioningServers, ProvidesProvisioningCapacityRequirements, Provisioner, ProvisionerActions, ProvisionerLifecycle, ProvisionerPanel
+final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksProvisioningStockVector, ConfiguresProvisionedProducts, ConfiguresProvisioningServers, ProvidesConfigurableProductOptions, ProvidesProvisioningCapacityRequirements, Provisioner, ProvisionerActions, ProvisionerLifecycle, ProvisionerPanel
 {
     public function __construct(
         private readonly ExtensionSettingsRepository $settings,
@@ -88,12 +94,284 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
             new ExtensionSettingDefinition('cpu', 'pterodactyl::messages.product.cpu', default: '100'),
             new ExtensionSettingDefinition('databases', 'pterodactyl::messages.product.databases', default: '0'),
             new ExtensionSettingDefinition('allocations', 'pterodactyl::messages.product.allocations', default: '1'),
+            new ExtensionSettingDefinition('additional_allocations', 'pterodactyl::messages.product.additional_allocations', type: 'number', help: 'pterodactyl::messages.product.additional_allocations_help'),
             new ExtensionSettingDefinition('backups', 'pterodactyl::messages.product.backups', default: '0'),
             new ExtensionSettingDefinition('docker_image', 'pterodactyl::messages.product.docker_image', help: 'pterodactyl::messages.product.docker_image_help'),
             new ExtensionSettingDefinition('startup', 'pterodactyl::messages.product.startup', help: 'pterodactyl::messages.product.startup_help'),
+            new ExtensionSettingDefinition('servername', 'pterodactyl::messages.product.servername', type: 'text', help: 'pterodactyl::messages.product.servername_help'),
             new ExtensionSettingDefinition('environment', 'pterodactyl::messages.product.environment', type: 'text', secret: true, help: 'pterodactyl::messages.product.environment_help'),
             new ExtensionSettingDefinition('dedicated_ip', 'pterodactyl::messages.product.dedicated_ip', default: '0', help: 'pterodactyl::messages.product.dedicated_ip_help'),
         ];
+    }
+
+    /** @return list<ConfigurableProductOptionDefinition> */
+    public function configurableProductOptions(): array
+    {
+        return [
+            new ConfigurableProductOptionDefinition(
+                key: 'location_id',
+                label: 'pterodactyl::messages.product.location_id',
+                type: ProductOptionType::Select,
+                dynamicChoices: true,
+                help: 'pterodactyl::messages.product.location_option_help',
+                lockType: true,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'nest_id',
+                label: 'pterodactyl::messages.product.nest_id',
+                type: ProductOptionType::Select,
+                dynamicChoices: true,
+                help: 'pterodactyl::messages.product.nest_option_help',
+                lockType: true,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'egg_id',
+                label: 'pterodactyl::messages.product.egg_id',
+                type: ProductOptionType::Select,
+                dynamicChoices: true,
+                help: 'pterodactyl::messages.product.egg_option_help',
+                lockType: true,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'memory',
+                label: 'pterodactyl::messages.product.memory',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'swap',
+                label: 'pterodactyl::messages.product.swap',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'disk',
+                label: 'pterodactyl::messages.product.disk',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'io',
+                label: 'pterodactyl::messages.product.io',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'cpu',
+                label: 'pterodactyl::messages.product.cpu',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'databases',
+                label: 'pterodactyl::messages.product.databases',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'allocations',
+                label: 'pterodactyl::messages.product.allocations',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'additional_allocations',
+                label: 'pterodactyl::messages.product.additional_allocations',
+                type: ProductOptionType::Number,
+                help: 'pterodactyl::messages.product.additional_allocations_help',
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'backups',
+                label: 'pterodactyl::messages.product.backups',
+                type: ProductOptionType::Number,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'docker_image',
+                label: 'pterodactyl::messages.product.docker_image',
+                type: ProductOptionType::Text,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'startup',
+                label: 'pterodactyl::messages.product.startup',
+                type: ProductOptionType::Text,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'servername',
+                label: 'pterodactyl::messages.product.servername',
+                type: ProductOptionType::Text,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'dedicated_ip',
+                label: 'pterodactyl::messages.product.dedicated_ip',
+                type: ProductOptionType::Toggle,
+            ),
+            new ConfigurableProductOptionDefinition(
+                key: 'environment',
+                label: 'pterodactyl::messages.product.environment',
+                type: ProductOptionType::Textarea,
+                help: 'pterodactyl::messages.product.environment_help',
+                lockType: true,
+                sensitive: true,
+            ),
+        ];
+    }
+
+    /**
+     * @return list<array{value: string, label: string, price_adjustment_amount?: int}>|null
+     */
+    public function configurableProductOptionChoices(
+        ConfigurableProductOptionDefinition $definition,
+        ConfigurableProductOptionContext $context,
+    ): ?array {
+        if (! $definition->dynamicChoices) {
+            return null;
+        }
+
+        $api = $this->api->withConnection($context->serverSettings ?? []);
+        $rows = match ($definition->key) {
+            'location_id' => $api->getLocations(),
+            'nest_id' => $api->getNests(),
+            'egg_id' => $this->eggChoicesForContext($api, $context),
+            default => null,
+        };
+
+        if ($rows === null) {
+            return null;
+        }
+
+        return $this->liveChoices(
+            $rows,
+            $definition->key === 'location_id' ? 'long' : 'name',
+            $definition->key === 'location_id' ? 'short' : null,
+        );
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function eggChoicesForContext(PterodactylApi $api, ConfigurableProductOptionContext $context): array
+    {
+        $nestId = $this->intSetting($context->selections, 'nest_id')
+            ?? $this->intSetting($context->productSettings, 'nest_id');
+        if ($nestId === null) {
+            return [];
+        }
+
+        $nests = $api->getNests();
+        $validNest = collect($nests)->contains(function (array $nest) use ($nestId): bool {
+            $attributes = is_array($nest['attributes'] ?? null) ? $nest['attributes'] : $nest;
+
+            return $this->intSetting($attributes, 'id') === $nestId;
+        });
+
+        return $validNest ? $api->getEggs($nestId) : [];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array{value: string, label: string}>
+     */
+    private function liveChoices(array $rows, string $labelKey, ?string $fallbackKey = null): array
+    {
+        $choices = [];
+        foreach ($rows as $row) {
+            $attributes = is_array($row['attributes'] ?? null) ? $row['attributes'] : $row;
+            $id = filter_var($attributes['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($id === false || $id === null) {
+                continue;
+            }
+
+            $label = trim((string) ($attributes[$labelKey] ?? ''));
+            if ($label === '' && $fallbackKey !== null) {
+                $label = trim((string) ($attributes[$fallbackKey] ?? ''));
+            }
+            $choices[] = ['value' => (string) $id, 'label' => $label !== '' ? $label : (string) $id];
+        }
+
+        return $choices;
+    }
+
+    public function validateConfigurableProductOptionValue(
+        ConfigurableProductOptionDefinition $definition,
+        mixed $value,
+        ConfigurableProductOptionContext $context,
+    ): ?bool {
+        if ($definition->key === 'servername') {
+            if (! is_string($value)) {
+                return false;
+            }
+            $name = trim($value);
+
+            return $name !== ''
+                && mb_strlen($name) <= 191
+                && preg_match('/[\\x00-\\x1F\\x7F]/', $name) !== 1;
+        }
+
+        if (in_array($definition->key, ['memory', 'swap', 'disk', 'io', 'cpu', 'databases', 'allocations', 'additional_allocations', 'backups'], true)) {
+            if ((! is_string($value) && ! is_int($value))
+                || preg_match('/^(0|[1-9][0-9]*)$/D', (string) $value) !== 1
+            ) {
+                return false;
+            }
+
+            $number = filter_var((string) $value, FILTER_VALIDATE_INT);
+            if ($number === false) {
+                return false;
+            }
+
+            return ! in_array($definition->key, ['memory', 'disk'], true) || $number > 0;
+        }
+
+        if ($definition->key !== 'environment') {
+            return null;
+        }
+        if (! is_string($value)) {
+            return false;
+        }
+        $nestId = $this->intSetting($context->selections, 'nest_id')
+            ?? $this->intSetting($context->productSettings, 'nest_id');
+        $eggId = $this->intSetting($context->selections, 'egg_id')
+            ?? $this->intSetting($context->productSettings, 'egg_id');
+        if ($nestId === null || $eggId === null) {
+            return false;
+        }
+
+        $egg = $this->api->withConnection($context->serverSettings ?? [])->getEgg($nestId, $eggId);
+        try {
+            $this->environment(['environment' => $value], $egg);
+
+            return true;
+        } catch (PterodactylProviderException $exception) {
+            if ($exception->errorKey === 'pterodactyl::messages.errors.invalid_mapping') {
+                return false;
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function configurableProductOptionHint(
+        ConfigurableProductOptionDefinition $definition,
+        ConfigurableProductOptionContext $context,
+    ): ?string {
+        if ($definition->key !== 'environment') {
+            return null;
+        }
+
+        $nestId = $this->intSetting($context->selections, 'nest_id')
+            ?? $this->intSetting($context->productSettings, 'nest_id');
+        $eggId = $this->intSetting($context->selections, 'egg_id')
+            ?? $this->intSetting($context->productSettings, 'egg_id');
+        if ($nestId === null || $eggId === null) {
+            return null;
+        }
+
+        $egg = $this->api->withConnection($context->serverSettings ?? [])->getEgg($nestId, $eggId);
+        $definitions = $this->environmentVariableDefinitions($egg);
+        $variables = array_slice(array_keys(array_filter(
+            $definitions,
+            static fn (array $definition): bool => $definition['user_viewable'] && $definition['user_editable'],
+        )), 0, 60);
+        if ($variables === []) {
+            return null;
+        }
+
+        return (string) __('pterodactyl::messages.product.environment_option_help', [
+            'variables' => implode(', ', $variables),
+        ]);
     }
 
     public function capacityKey(ProvisioningStockContext $context): string
@@ -442,7 +720,7 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
                 'dedicated_ip' => $this->boolSetting($settings, 'dedicated_ip'),
                 'feature_limits' => [
                     'databases' => $this->intSetting($settings, 'databases') ?? 0,
-                    'allocations' => $this->intSetting($settings, 'allocations') ?? 1,
+                    'allocations' => $this->allocationLimit($settings),
                     'backups' => $this->intSetting($settings, 'backups') ?? 0,
                 ],
             ]);
@@ -512,8 +790,8 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
                     providerKey: $this->id(),
                     externalRef: $instance->externalRef,
                     meta: array_merge($instance->meta, ['provider_reconciliation' => 'absent']),
-                        serverSettings: $instance->serverSettings,
-                        providerSettings: $instance->providerSettings,
+                    serverSettings: $instance->serverSettings,
+                    providerSettings: $instance->providerSettings,
                 );
             }
 
@@ -818,7 +1096,9 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
             }
         }
         foreach (['databases', 'allocations', 'backups'] as $key) {
-            $expected = $this->intSetting($settings, $key);
+            $expected = $key === 'allocations'
+                ? $this->allocationLimit($settings)
+                : $this->intSetting($settings, $key);
             if ($expected !== null && $this->intSetting($featureLimits, $key) !== $expected) {
                 throw PterodactylProviderException::failed('pterodactyl::messages.errors.provider_failed');
             }
@@ -856,7 +1136,7 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
     private function settingsWithProductDefaults(array $settings): array
     {
         $this->assertNoRedactionPlaceholder($settings);
-        foreach (['location_id', 'nest_id', 'egg_id', 'memory', 'swap', 'disk', 'io', 'cpu', 'databases', 'allocations', 'backups'] as $key) {
+        foreach (['location_id', 'nest_id', 'egg_id', 'memory', 'swap', 'disk', 'io', 'cpu', 'databases', 'allocations', 'additional_allocations', 'backups'] as $key) {
             if (array_key_exists($key, $settings)
                 && $settings[$key] !== null
                 && $settings[$key] !== ''
@@ -867,6 +1147,7 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
         }
         $this->optionalString($settings, 'docker_image');
         $this->optionalString($settings, 'startup');
+        $this->optionalString($settings, 'servername');
 
         $resolved = $settings;
         foreach ($this->productSettings() as $definition) {
@@ -901,6 +1182,7 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
         foreach ($settings as $value) {
             if (is_array($value)) {
                 $this->assertNoRedactionPlaceholder($value);
+
                 continue;
             }
             if ($value === '[REDACTED]') {
@@ -1029,10 +1311,14 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
         if ($startup === '') {
             $startup = (string) ($egg['startup'] ?? '');
         }
+        $serverName = $this->optionalString($settings, 'servername');
+        if ($serverName === '') {
+            $serverName = $instance->label !== '' ? $instance->label : $externalId;
+        }
 
         return [
             'external_id' => $externalId,
-            'name' => mb_substr($instance->label !== '' ? $instance->label : $externalId, 0, 191),
+            'name' => mb_substr($serverName, 0, 191),
             'user' => $userId,
             'nest' => $this->intSetting($settings, 'nest_id') ?? 0,
             'egg' => $eggId,
@@ -1048,7 +1334,7 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
             ],
             'feature_limits' => [
                 'databases' => $this->intSetting($settings, 'databases') ?? 0,
-                'allocations' => $this->intSetting($settings, 'allocations') ?? 1,
+                'allocations' => $this->allocationLimit($settings),
                 'backups' => $this->intSetting($settings, 'backups') ?? 0,
             ],
             'deploy' => [
@@ -1067,25 +1353,13 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
      */
     private function environment(array $settings, array $egg): array
     {
+        $definitions = $this->environmentVariableDefinitions($egg);
         $environment = [];
-        $variables = $egg['relationships']['variables']['data'] ?? [];
-        if (! is_array($variables)) {
-            throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+        foreach ($definitions as $key => $definition) {
+            $environment[$key] = $definition['default_value'];
         }
-        foreach ($variables as $variable) {
-            $attributes = is_array($variable) ? ($variable['attributes'] ?? $variable) : null;
-            if (! is_array($attributes)
-                || ! is_string($attributes['env_variable'] ?? null)
-                || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $attributes['env_variable']) !== 1
-                || ! is_string($attributes['default_value'] ?? null)
-            ) {
-                throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
-            }
-            $environment[$attributes['env_variable']] = $attributes['default_value'];
-        }
-
         $raw = $this->optionalString($settings, 'environment');
-        foreach (preg_split('/\r\n|\r|\n/', $raw) ?: [] as $line) {
+        foreach (preg_split('/\\r\\n|\\r|\\n/', $raw) ?: [] as $line) {
             $line = trim($line);
             if ($line === '') {
                 continue;
@@ -1095,13 +1369,96 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
             }
             [$key, $value] = explode('=', $line, 2);
             $key = trim($key);
-            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $key) !== 1) {
+            if (! isset($definitions[$key])
+                || ! $definitions[$key]['user_viewable']
+                || ! $definitions[$key]['user_editable']
+                || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $key) !== 1
+            ) {
                 throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_mapping');
             }
             $environment[$key] = trim($value);
         }
 
+        $rules = [];
+        foreach ($definitions as $key => $definition) {
+            if ($definition['rules'] !== '' && $definition['rules'] !== []) {
+                $rules[$key] = $definition['rules'];
+            }
+        }
+        try {
+            if (! Validator::make($environment, $rules)->passes()) {
+                throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_mapping');
+            }
+        } catch (PterodactylProviderException $exception) {
+            throw $exception;
+        } catch (Throwable) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+        }
+
         return $environment;
+    }
+
+    /**
+     * @param  array<string, mixed>  $egg
+     * @return array<string, array{default_value: string, user_viewable: bool, user_editable: bool, rules: string|list<string>}>
+     */
+    private function environmentVariableDefinitions(array $egg): array
+    {
+        $variables = $egg['relationships']['variables']['data'] ?? [];
+        if (! is_array($variables) || ! array_is_list($variables)) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+        }
+
+        $definitions = [];
+        foreach ($variables as $variable) {
+            $attributes = is_array($variable) ? ($variable['attributes'] ?? $variable) : null;
+            $editable = is_array($attributes) && array_key_exists('user_editable', $attributes)
+                ? filter_var($attributes['user_editable'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
+                : null;
+            $viewable = is_array($attributes) && array_key_exists('user_viewable', $attributes)
+                ? filter_var($attributes['user_viewable'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
+                : null;
+            $rules = is_array($attributes) ? ($attributes['rules'] ?? null) : null;
+            if (is_string($rules)) {
+                $rules = trim($rules);
+            } elseif (is_array($rules) && array_is_list($rules)
+                && count(array_filter($rules, 'is_string')) === count($rules)
+            ) {
+                $rules = array_values($rules);
+            } else {
+                $rules = null;
+            }
+            if (! is_array($attributes)
+                || ! is_string($attributes['env_variable'] ?? null)
+                || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $attributes['env_variable']) !== 1
+                || ! is_string($attributes['default_value'] ?? null)
+                || $editable === null
+                || $viewable === null
+                || $rules === null
+                || array_key_exists($attributes['env_variable'], $definitions)
+            ) {
+                throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+            }
+            $definitions[$attributes['env_variable']] = [
+                'default_value' => $attributes['default_value'],
+                'user_viewable' => $viewable,
+                'user_editable' => $editable,
+                'rules' => $rules,
+            ];
+        }
+
+        return $definitions;
+    }
+
+    /** @param array<string, mixed> $egg @return array<string, string> */
+    private function environmentVariableDefaults(array $egg): array
+    {
+        $defaults = [];
+        foreach ($this->environmentVariableDefinitions($egg) as $key => $definition) {
+            $defaults[$key] = $definition['default_value'];
+        }
+
+        return $defaults;
     }
 
     /**
@@ -1130,6 +1487,21 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
         }
 
         return false;
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function allocationLimit(array $settings): int
+    {
+        $additional = $this->intSetting($settings, 'additional_allocations');
+        if ($additional !== null) {
+            if ($additional >= PHP_INT_MAX) {
+                throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_mapping');
+            }
+
+            return $additional + 1;
+        }
+
+        return $this->intSetting($settings, 'allocations') ?? 1;
     }
 
     /**

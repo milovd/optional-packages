@@ -41,6 +41,15 @@ interface PterodactylApi
     /**
      * @return array<string, mixed>
      */
+    /** @return list<array<string, mixed>> */
+    public function getLocations(): array;
+
+    /** @return list<array<string, mixed>> */
+    public function getNests(): array;
+
+    /** @return list<array<string, mixed>> */
+    public function getEggs(int $nestId): array;
+
     public function getEgg(int $nestId, int $eggId): array;
 
     /**

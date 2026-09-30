@@ -9,6 +9,7 @@ use App\Agovena\Security\OutboundHttpUrlValidator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 final class HttpPterodactylApi implements PterodactylApi
@@ -41,6 +42,55 @@ final class HttpPterodactylApi implements PterodactylApi
     public function connectionTest(): array
     {
         return $this->application('GET', '/api/application/servers', ['per_page' => 1]);
+    }
+
+    public function getLocations(): array
+    {
+        return $this->applicationCollection('/api/application/locations');
+    }
+
+    public function getNests(): array
+    {
+        return $this->applicationCollection('/api/application/nests');
+    }
+
+    public function getEggs(int $nestId): array
+    {
+        if ($nestId < 1) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_egg');
+        }
+
+        return $this->applicationCollection('/api/application/nests/'.$nestId.'/eggs');
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function applicationCollection(string $path): array
+    {
+        $items = [];
+        $page = 1;
+        $totalPages = 1;
+
+        do {
+            $payload = $this->application('GET', $path, ['per_page' => 100, 'page' => $page]);
+            $data = $payload['data'] ?? null;
+            $pagination = $payload['meta']['pagination'] ?? [];
+            if (! is_array($data) || ! array_is_list($data) || ! is_array($pagination)) {
+                throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+            }
+
+            foreach ($data as $row) {
+                $attributes = is_array($row) ? ($row['attributes'] ?? $row) : null;
+                if (! is_array($attributes) || $this->positiveInteger($attributes['id'] ?? null) === null) {
+                    throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+                }
+                $items[] = $attributes;
+            }
+
+            $totalPages = max(1, (int) ($pagination['total_pages'] ?? $page));
+            $page++;
+        } while ($page <= min($totalPages, 100));
+
+        return $items;
     }
 
     public function getDeployableNodes(int $locationId, int $memory, int $disk): array
@@ -350,7 +400,7 @@ final class HttpPterodactylApi implements PterodactylApi
         }
         try {
             $this->urlValidator->assertTlsVerification($verify);
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_mapping');
         }
 
