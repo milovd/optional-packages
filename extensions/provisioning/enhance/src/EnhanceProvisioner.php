@@ -7,7 +7,6 @@ namespace Agovena\Extensions\Enhance;
 use Agovena\Modules\Provisioning\Support\AbstractServerProvisioner;
 use App\Agovena\Extensions\ExtensionSettingDefinition;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
-use App\Agovena\Provisioning\ServiceInstanceInfo;
 
 final class EnhanceProvisioner extends AbstractServerProvisioner
 {
@@ -51,16 +50,5 @@ final class EnhanceProvisioner extends AbstractServerProvisioner
     protected function requiredConnectionKeys(): array
     {
         return ['api_url', 'api_token', 'account_id'];
-    }
-
-    /** @param array<string, mixed> $providerSettings @return array<string, mixed> */
-    protected function buildCreatePayload(ServiceInstanceInfo $instance, array $providerSettings, string $externalId): array
-    {
-        return [
-            'external_id' => $externalId,
-            'name' => $instance->label,
-            'domain' => $providerSettings['domain'] ?? null,
-            'plan' => $providerSettings['plan'] ?? null,
-        ];
     }
 }

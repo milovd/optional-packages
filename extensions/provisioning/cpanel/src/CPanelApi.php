@@ -6,6 +6,4 @@ namespace Agovena\Extensions\CPanel;
 
 use Agovena\Modules\Provisioning\Support\ServerApi;
 
-interface CPanelApi extends ServerApi
-{
-}
+interface CPanelApi extends ServerApi {}

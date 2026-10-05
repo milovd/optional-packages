@@ -50,6 +50,7 @@ return [
     'errors' => [
         'not_configured' => 'Providerverbinding is niet geconfigureerd.',
         'not_provisioned' => 'De service heeft nog geen providerkoppeling.',
+        'invalid_mapping' => 'De providerverbinding of servicekoppeling is ongeldig.',
         'action_unavailable' => 'Deze provideractie is niet beschikbaar.',
         'unauthorized' => 'De provider heeft de gegevens geweigerd.',
         'not_found' => 'De providerresource is niet gevonden.',

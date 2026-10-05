@@ -7,7 +7,6 @@ namespace Agovena\Extensions\Convoy;
 use Agovena\Modules\Provisioning\Support\AbstractServerProvisioner;
 use App\Agovena\Extensions\ExtensionSettingDefinition;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
-use App\Agovena\Provisioning\ServiceInstanceInfo;
 
 final class ConvoyProvisioner extends AbstractServerProvisioner
 {
@@ -52,17 +51,5 @@ final class ConvoyProvisioner extends AbstractServerProvisioner
     protected function requiredConnectionKeys(): array
     {
         return ['api_url', 'api_token', 'organization_id'];
-    }
-
-    /** @param array<string, mixed> $providerSettings @return array<string, mixed> */
-    protected function buildCreatePayload(ServiceInstanceInfo $instance, array $providerSettings, string $externalId): array
-    {
-        return [
-            'external_id' => $externalId,
-            'name' => $instance->label,
-            'template_id' => $providerSettings['template_id'] ?? null,
-            'region' => $providerSettings['region'] ?? null,
-            'plan' => $providerSettings['plan'] ?? null,
-        ];
     }
 }

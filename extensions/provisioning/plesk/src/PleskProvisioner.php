@@ -7,7 +7,6 @@ namespace Agovena\Extensions\Plesk;
 use Agovena\Modules\Provisioning\Support\AbstractServerProvisioner;
 use App\Agovena\Extensions\ExtensionSettingDefinition;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
-use App\Agovena\Provisioning\ServiceInstanceInfo;
 
 final class PleskProvisioner extends AbstractServerProvisioner
 {
@@ -47,15 +46,5 @@ final class PleskProvisioner extends AbstractServerProvisioner
     protected function requiredConnectionKeys(): array
     {
         return ['api_url', 'api_token'];
-    }
-
-    protected function buildCreatePayload(ServiceInstanceInfo $instance, array $providerSettings, string $externalId): array
-    {
-        return [
-            'external_id' => $externalId,
-            'name' => $instance->label,
-            'domain' => $providerSettings['domain'] ?? null,
-            'service_plan' => $providerSettings['service_plan'] ?? null,
-        ];
     }
 }

@@ -50,6 +50,7 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
     {
         $this->assertUnsupported();
     }
+
     public function poll(ServiceInstanceInfo $instance): ServiceInstanceInfo
     {
         return $this->syncStatus($instance);
@@ -87,9 +88,8 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
 
     public function syncStatus(ServiceInstanceInfo $instance): ServiceInstanceInfo
     {
+        unset($instance);
         $this->assertUnsupported();
-
-        return $instance;
     }
 
     /** @return list<ProvisionerAction> */
@@ -139,9 +139,6 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         return $this->testServer($settings);
     }
 
-    /** @param array<string, mixed> $providerSettings @return array<string, mixed> */
-    abstract protected function buildCreatePayload(ServiceInstanceInfo $instance, array $providerSettings, string $externalId): array;
-
     /** @return list<string> */
     protected function requiredConnectionKeys(): array
     {
@@ -190,16 +187,6 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         return $payload;
     }
 
-    protected function managementUrl(ServiceInstanceInfo $instance, string $externalId): ?string
-    {
-        $base = trim((string) $this->connectionSetting($instance, 'api_url', ''));
-        if ($base === '') {
-            return null;
-        }
-
-        return rtrim($base, '/').'/servers/'.rawurlencode($externalId);
-    }
-
     protected function message(string $key): string
     {
         return __(''.$this->id().'::messages.'.$key);
@@ -212,89 +199,6 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         ]);
     }
 
-    private function assertConfigured(ServiceInstanceInfo $instance): void
-    {
-        foreach ($this->requiredConnectionKeys() as $key) {
-            if (trim((string) $this->connectionSetting($instance, $key, '')) === '') {
-                throw ValidationException::withMessages([
-                    'instance' => $this->message('errors.not_configured'),
-                ]);
-            }
-        }
-    }
-
-    private function mutate(ServiceInstanceInfo $instance, callable $callback): void
-    {
-        $externalId = $this->requireMapping($instance);
-
-        try {
-            $callback($externalId, $this->apiFor($instance));
-        } catch (ServerProviderException $exception) {
-            throw ValidationException::withMessages([
-                'instance' => $this->message($exception->errorKey),
-            ]);
-        }
-    }
-
-    private function requireMapping(ServiceInstanceInfo $instance): string
-    {
-        $externalId = $this->mappingId($instance);
-        if ($externalId === null) {
-            throw ValidationException::withMessages([
-                'instance' => $this->message('errors.not_provisioned'),
-            ]);
-        }
-
-        return $externalId;
-    }
-
-    /** @param array<string, mixed>|null $settings */
-    private function apiForConnection(?array $settings): ServerApi
-    {
-        $connection = $settings ?? $this->repositoryConnectionSettings();
-        foreach ($this->requiredConnectionKeys() as $key) {
-            if (trim((string) ($connection[$key] ?? '')) === '') {
-                throw new ServerProviderException('errors.not_configured');
-            }
-        }
-
-        return $this->api->withConnection($connection);
-    }
-
-    private function apiFor(ServiceInstanceInfo $instance): ServerApi
-    {
-        $settings = $this->connectionSettings($instance);
-        foreach ($this->requiredConnectionKeys() as $key) {
-            if (trim((string) ($settings[$key] ?? '')) === '') {
-                throw ValidationException::withMessages([
-                    'instance' => $this->message('errors.not_configured'),
-                ]);
-            }
-        }
-
-        return $this->api->withConnection($settings);
-    }
-
-    /** @return array<string, mixed> */
-    private function providerSettings(ServiceInstanceInfo $instance): array
-    {
-        $settings = $instance->providerSettings ?? [];
-
-        return is_array($settings) ? $settings : [];
-    }
-
-    /** @return array<string, mixed> */
-    private function connectionSettings(ServiceInstanceInfo $instance): array
-    {
-        $settings = $instance->serverSettings ?? [];
-
-        if (($instance->meta['server_settings_required'] ?? false) === true) {
-            return is_array($settings) ? $settings : [];
-        }
-
-        return is_array($settings) && $settings !== [] ? $settings : $this->repositoryConnectionSettings();
-    }
-
     /** @return array<string, mixed> */
     private function repositoryConnectionSettings(): array
     {
@@ -304,18 +208,6 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         }
 
         return $settings;
-    }
-
-    private function connectionSetting(ServiceInstanceInfo $instance, string $key, mixed $default = null): mixed
-    {
-        $settings = $this->connectionSettings($instance);
-
-        return array_key_exists($key, $settings) ? $settings[$key] : $default;
-    }
-
-    private function externalId(int $instanceId): string
-    {
-        return 'agovena-'.$this->id().'-'.$instanceId;
     }
 
     private function mappingId(ServiceInstanceInfo $instance): ?string
@@ -330,77 +222,5 @@ abstract class AbstractServerProvisioner implements ConfiguresProvisionedProduct
         $providerId = $mapping['provider_id'] ?? null;
 
         return is_scalar($providerId) && trim((string) $providerId) !== '' ? trim((string) $providerId) : null;
-    }
-
-    /** @param array<string, mixed> $server */
-    private function storeMapping(int $instanceId, array $server, string $externalId): string
-    {
-        $model = ServiceInstance::query()->find($instanceId);
-        if ($model === null) {
-            return $externalId;
-        }
-
-        $providerId = $this->providerId($server, $externalId);
-        if ($providerId === null) {
-            throw ValidationException::withMessages([
-                'instance' => $this->message('errors.not_provisioned'),
-            ]);
-        }
-        $meta = is_array($model->meta) ? $model->meta : [];
-        if (is_string($model->external_ref) && trim($model->external_ref) !== '') {
-            $meta['source_external_ref'] ??= trim($model->external_ref);
-        }
-        $meta['provider_mapping'] = ['provider_id' => $providerId] + array_intersect_key($server, array_flip([
-            'id', 'external_id', 'uuid', 'identifier', 'name', 'status', 'management_url',
-        ]));
-        $model->forceFill([
-            'provider_key' => $this->id(),
-            'external_ref' => $providerId,
-            'meta' => $meta,
-        ])->save();
-
-        return $providerId;
-    }
-
-    private function forgetMapping(int $instanceId): void
-    {
-        $model = ServiceInstance::query()->find($instanceId);
-        if ($model === null) {
-            return;
-        }
-        $meta = is_array($model->meta) ? $model->meta : [];
-        unset($meta['provider_mapping']);
-        $model->forceFill(['external_ref' => null, 'meta' => $meta, 'terminated_at' => now()])->save();
-    }
-
-    /** @param array<string, mixed> $server */
-    private function providerId(array $server, string $externalId): ?string
-    {
-        foreach (['id', 'uuid', 'identifier', 'server_id', 'resource_id'] as $key) {
-            if (isset($server[$key]) && trim((string) $server[$key]) !== '') {
-                return (string) $server[$key];
-            }
-        }
-
-        if (isset($server['external_id']) && trim((string) $server['external_id']) !== '' && (string) $server['external_id'] !== $externalId) {
-            return (string) $server['external_id'];
-        }
-
-        return null;
-    }
-
-    /** @param array<string, mixed> $meta */
-    private function withStatus(ServiceInstanceInfo $instance, string $status, string $externalId, array $meta = []): ServiceInstanceInfo
-    {
-        return new ServiceInstanceInfo(
-            id: $instance->id,
-            label: $instance->label,
-            status: $status,
-            providerKey: $this->id(),
-            externalRef: $externalId,
-            meta: array_merge($instance->meta, $meta),
-            serverSettings: $instance->serverSettings,
-            providerSettings: $instance->providerSettings,
-        );
     }
 }

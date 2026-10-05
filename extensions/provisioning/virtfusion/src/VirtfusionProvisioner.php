@@ -7,7 +7,6 @@ namespace Agovena\Extensions\Virtfusion;
 use Agovena\Modules\Provisioning\Support\AbstractServerProvisioner;
 use App\Agovena\Extensions\ExtensionSettingDefinition;
 use App\Agovena\Extensions\ExtensionSettingsRepository;
-use App\Agovena\Provisioning\ServiceInstanceInfo;
 
 final class VirtfusionProvisioner extends AbstractServerProvisioner
 {
@@ -48,16 +47,5 @@ final class VirtfusionProvisioner extends AbstractServerProvisioner
     protected function requiredConnectionKeys(): array
     {
         return ['api_url', 'api_token'];
-    }
-
-    protected function buildCreatePayload(ServiceInstanceInfo $instance, array $providerSettings, string $externalId): array
-    {
-        return [
-            'external_id' => $externalId,
-            'name' => $instance->label,
-            'plan_id' => $providerSettings['plan_id'] ?? null,
-            'template_id' => $providerSettings['template_id'] ?? null,
-            'location_id' => $providerSettings['location_id'] ?? null,
-        ];
     }
 }

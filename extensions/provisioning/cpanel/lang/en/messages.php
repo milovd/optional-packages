@@ -50,6 +50,7 @@ return [
     'errors' => [
         'not_configured' => 'Provider connection is not configured.',
         'not_provisioned' => 'The service has no provider mapping yet.',
+        'invalid_mapping' => 'The provider connection or service account mapping is invalid.',
         'action_unavailable' => 'This provider action is unavailable.',
         'unauthorized' => 'The provider rejected the credentials.',
         'not_found' => 'The provider resource was not found.',
