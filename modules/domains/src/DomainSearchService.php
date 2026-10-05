@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Agovena\Modules\Domains;
 
-use App\Models\Product;
 use App\Agovena\Money\CurrencyConverter;
+use App\Models\Product;
 use App\Support\MoneyFormatter;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
-use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
 final class DomainSearchService
 {
@@ -94,6 +93,7 @@ final class DomainSearchService
         $selection = session()->get('domains.quotes.'.$token);
         if (! is_array($selection) || (int) ($selection['expires_at'] ?? 0) < now()->timestamp) {
             session()->forget('domains.quotes.'.$token);
+
             return null;
         }
 
@@ -230,6 +230,7 @@ final class DomainSearchService
 
         $tlds = array_values(array_filter(array_map(static function (mixed $tld): ?string {
             $tld = strtolower(ltrim(trim((string) $tld), '.'));
+
             return preg_match('/^[a-z0-9-]{2,63}$/', $tld) === 1 ? $tld : null;
         }, $tlds)));
 

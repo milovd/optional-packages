@@ -13,6 +13,14 @@ final class HttpCloudflareDnsApi implements CloudflareDnsApi
 {
     private const BASE_URL = 'https://api.cloudflare.com/client/v4';
 
+    /** GET /zones documents per_page between 5 and 50. */
+    private const ZONE_PAGE_SIZE = 50;
+
+    private const RECORD_PAGE_SIZE = 500;
+
+    /** Hard stop so a malformed result_info can never loop forever. */
+    private const MAX_RECORD_PAGES = 200;
+
     public function __construct(
         private readonly ExtensionSettingsRepository $settings,
     ) {}
@@ -23,31 +31,43 @@ final class HttpCloudflareDnsApi implements CloudflareDnsApi
         $existing = $this->request('get', '/zones', [
             'name' => $domain,
             'account.id' => $accountId,
-            'per_page' => 1,
+            'per_page' => self::ZONE_PAGE_SIZE,
         ]);
         $zones = is_array($existing['result'] ?? null) ? $existing['result'] : [];
-        $zone = is_array($zones[0] ?? null) ? $zones[0] : null;
-        if ($zone !== null) {
-            return $zone;
+        foreach ($zones as $zone) {
+            if (is_array($zone) && strtolower((string) ($zone['name'] ?? '')) === $domain) {
+                return $zone;
+            }
         }
 
-        $created = $this->request('post', '/zones', [], [
+        return $this->result($this->request('post', '/zones', [], [
             'name' => $domain,
             'account' => ['id' => $accountId],
-            'jump_start' => false,
-        ]);
-
-        return is_array($created['result'] ?? null) ? $created['result'] : [];
+            'type' => 'full',
+        ]));
     }
 
     public function listRecords(string $zoneReference): array
     {
-        $response = $this->request('get', '/zones/'.$this->reference($zoneReference).'/dns_records', [
-            'per_page' => 100,
-        ]);
-        $records = $response['result'] ?? [];
+        $path = '/zones/'.$this->reference($zoneReference).'/dns_records';
+        $records = [];
+        $page = 1;
+        do {
+            $response = $this->request('get', $path, [
+                'page' => $page,
+                'per_page' => self::RECORD_PAGE_SIZE,
+            ]);
+            $batch = is_array($response['result'] ?? null) ? $response['result'] : [];
+            foreach ($batch as $record) {
+                if (is_array($record)) {
+                    $records[] = $record;
+                }
+            }
+            $totalPages = (int) ($response['result_info']['total_pages'] ?? 1);
+            $page++;
+        } while ($batch !== [] && $page <= $totalPages && $page <= self::MAX_RECORD_PAGES);
 
-        return is_array($records) ? array_values(array_filter($records, 'is_array')) : [];
+        return $records;
     }
 
     public function createRecord(string $zoneReference, array $record): array
@@ -78,7 +98,11 @@ final class HttpCloudflareDnsApi implements CloudflareDnsApi
         ));
     }
 
-    /** @param array<string, mixed> $query @param array<string, mixed> $payload @return array<string, mixed> */
+    /**
+     * @param  array<string, mixed>  $query
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
     private function request(string $method, string $path, array $query = [], array $payload = []): array
     {
         if (app()->environment('demo')) {
@@ -89,41 +113,44 @@ final class HttpCloudflareDnsApi implements CloudflareDnsApi
         if ($this->accountId() === '' || $token === '') {
             throw new RuntimeException('Cloudflare DNS is not configured.');
         }
+        if (! preg_match('/\A[a-zA-Z0-9]{1,32}\z/', $this->accountId())) {
+            throw new RuntimeException('Cloudflare DNS account ID is invalid.');
+        }
 
         try {
             $request = Http::baseUrl(self::BASE_URL)
                 ->withToken($token)
+                ->withoutRedirecting()
                 ->acceptJson()
                 ->asJson()
                 ->timeout(15);
-            $response = match (strtolower($method)) {
+            $response = match ($method) {
                 'get' => $request->get($path, $query),
                 'post' => $request->post($path, $payload),
                 'put' => $request->put($path, $payload),
                 'delete' => $request->delete($path),
                 default => throw new RuntimeException('Unsupported Cloudflare DNS request method.'),
             };
-
-            if (! $response->successful()) {
-                throw new RuntimeException('Cloudflare DNS returned an unsuccessful response.');
-            }
-
-            $decoded = $response->json();
-            if (! is_array($decoded) || ($decoded['success'] ?? false) !== true) {
-                throw new RuntimeException('Cloudflare DNS rejected the request.');
-            }
-
-            return $decoded;
         } catch (Throwable $exception) {
-            if ($exception instanceof RuntimeException && str_contains($exception->getMessage(), 'Cloudflare DNS')) {
-                throw $exception;
-            }
-
             throw new RuntimeException('Cloudflare DNS request failed.', previous: $exception);
         }
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Cloudflare DNS returned an unsuccessful response.');
+        }
+
+        $decoded = $response->json();
+        if (! is_array($decoded) || ($decoded['success'] ?? false) !== true) {
+            throw new RuntimeException('Cloudflare DNS rejected the request.');
+        }
+
+        return $decoded;
     }
 
-    /** @param array<string, mixed> $response @return array<string, mixed> */
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     */
     private function result(array $response): array
     {
         return is_array($response['result'] ?? null) ? $response['result'] : [];

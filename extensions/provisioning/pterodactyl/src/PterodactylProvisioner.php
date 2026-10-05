@@ -270,7 +270,7 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
         foreach ($rows as $row) {
             $attributes = is_array($row['attributes'] ?? null) ? $row['attributes'] : $row;
             $id = filter_var($attributes['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-            if ($id === false || $id === null) {
+            if ($id === false) {
                 continue;
             }
 
@@ -451,14 +451,14 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
                 'cart' => __($exception->errorKey),
             ]);
         }
-        if (! is_array($nodes) || $nodes === []) {
+        if ($nodes === []) {
             throw ValidationException::withMessages([
                 'cart' => __('pterodactyl::messages.errors.out_of_stock'),
             ]);
         }
         $availableUnits = 0;
         foreach ($nodes as $node) {
-            if (! is_array($node) || ! is_numeric($node['capacity'] ?? null) || (float) $node['capacity'] < 1) {
+            if (! is_numeric($node['capacity'] ?? null) || (float) $node['capacity'] < 1) {
                 throw ValidationException::withMessages([
                     'cart' => __('pterodactyl::messages.errors.malformed'),
                 ]);
@@ -744,9 +744,10 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
     public function syncStatus(ServiceInstanceInfo $instance): ServiceInstanceInfo
     {
         $api = $this->apiFor($instance);
+        $mapping = null;
+        $mappingWasRecovered = false;
         try {
             $mapping = $this->mapping($instance->id);
-            $mappingWasRecovered = false;
             if ($mapping === null) {
                 $existing = $api->findServerByExternalId($this->externalId($instance->id));
                 if ($existing === null) {
@@ -1421,11 +1422,9 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
             $rules = is_array($attributes) ? ($attributes['rules'] ?? null) : null;
             if (is_string($rules)) {
                 $rules = trim($rules);
-            } elseif (is_array($rules) && array_is_list($rules)
-                && count(array_filter($rules, 'is_string')) === count($rules)
+            } elseif (! is_array($rules) || ! array_is_list($rules)
+                || count(array_filter($rules, 'is_string')) !== count($rules)
             ) {
-                $rules = array_values($rules);
-            } else {
                 $rules = null;
             }
             if (! is_array($attributes)
@@ -1450,43 +1449,12 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
         return $definitions;
     }
 
-    /** @param array<string, mixed> $egg @return array<string, string> */
-    private function environmentVariableDefaults(array $egg): array
-    {
-        $defaults = [];
-        foreach ($this->environmentVariableDefinitions($egg) as $key => $definition) {
-            $defaults[$key] = $definition['default_value'];
-        }
-
-        return $defaults;
-    }
-
     /**
      * @return array<string, mixed>
      */
     private function providerSettings(ServiceInstanceInfo $instance): array
     {
         return is_array($instance->providerSettings) ? $instance->providerSettings : [];
-    }
-
-    private function containsSensitiveSettings(mixed $value): bool
-    {
-        if (! is_array($value)) {
-            return false;
-        }
-        foreach ($value as $key => $nested) {
-            $normalizedKey = strtolower((string) $key);
-            if ($normalizedKey === 'environment'
-                || preg_match('/(?:api[_-]?key|access[_-]?key|token|secret|password|passwd|credential|authorization|private[_-]?key|connection|string|dsn)/', $normalizedKey) === 1
-            ) {
-                return true;
-            }
-            if ($this->containsSensitiveSettings($nested)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /** @param array<string, mixed> $settings */
@@ -1576,7 +1544,6 @@ final class PterodactylProvisioner implements ChecksProvisioningStock, ChecksPro
     private function connectionSettings(ServiceInstanceInfo $instance): array
     {
         $settings = $instance->serverSettings ?? [];
-        $settings = is_array($settings) ? $settings : [];
         if (($instance->meta['server_settings_required'] ?? false) === true
             && ! $this->hasRequiredServerSettings($settings, ['panel_url', 'application_api_key', 'user_id'])
         ) {

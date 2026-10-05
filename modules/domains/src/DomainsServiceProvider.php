@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Agovena\Modules\Domains;
 
-use App\Agovena\Extensions\RuntimeRegistry;
-use App\Agovena\Modules\Contracts\Module;
-use Illuminate\Support\ServiceProvider;
+use Agovena\Modules\Domains\Console\RefreshDomainRegistrationsCommand;
 use Agovena\Modules\Domains\Providers\DemoDnsProvider;
 use Agovena\Modules\Domains\Providers\DemoDomainRegistrar;
+use App\Agovena\Extensions\RuntimeRegistry;
+use App\Agovena\Modules\Contracts\Module;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\ServiceProvider;
 
 final class DomainsServiceProvider extends ServiceProvider
 {
@@ -26,10 +28,17 @@ final class DomainsServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'domains');
         $registrars = app(DomainRegistrarRegistry::class);
         $dnsProviders = app(DomainDnsProviderRegistry::class);
-        $registrars->register(new DemoDomainRegistrar());
-        $dnsProviders->register(new DemoDnsProvider());
+        $registrars->register(new DemoDomainRegistrar);
+        $dnsProviders->register(new DemoDnsProvider);
         app(RuntimeRegistry::class)->register($registrars);
         app(RuntimeRegistry::class)->register($dnsProviders);
+        $this->commands([RefreshDomainRegistrationsCommand::class]);
+        $this->app->booted(function (): void {
+            $this->app->make(Schedule::class)
+                ->command('agovena:refresh-domain-registrations')
+                ->everyFiveMinutes()
+                ->withoutOverlapping();
+        });
     }
 
     public function module(): Module

@@ -47,6 +47,7 @@ final class DomainName
         }
 
         $parts = explode('.', $domain);
+
         return end($parts) ?: null;
     }
 

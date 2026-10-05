@@ -100,8 +100,9 @@ final class HttpPterodactylApi implements PterodactylApi
         $totalPages = 1;
 
         do {
+            // The official NodeController only allows uuid, name, fqdn and
+            // daemon_token_id filters, so location scoping happens here.
             $payload = $this->application('GET', '/api/application/nodes', [
-                'filter[location_id]' => $locationId,
                 'per_page' => 100,
                 'page' => $page,
             ]);
@@ -114,6 +115,13 @@ final class HttpPterodactylApi implements PterodactylApi
             foreach ($items as $item) {
                 $attributes = is_array($item) ? ($item['attributes'] ?? $item) : null;
                 if (! is_array($attributes) || ! $this->isDeployableNode($attributes)) {
+                    continue;
+                }
+                $nodeLocationId = $this->positiveInteger($attributes['location_id'] ?? null);
+                if ($nodeLocationId === null) {
+                    throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+                }
+                if ($nodeLocationId !== $locationId) {
                     continue;
                 }
                 $nodeId = $this->positiveInteger($attributes['id'] ?? null);
@@ -138,16 +146,22 @@ final class HttpPterodactylApi implements PterodactylApi
         return $nodes;
     }
 
-    /** @param array<string, mixed> $attributes */
+    /**
+     * Automatic deployment (FindViableNodesService) only places servers on
+     * public nodes, so private or maintenance nodes are never sellable stock.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
     private function isDeployableNode(array $attributes): bool
     {
-        if (! array_key_exists('maintenance_mode', $attributes)) {
+        if (! array_key_exists('maintenance_mode', $attributes) || ! array_key_exists('public', $attributes)) {
             return false;
         }
 
         $maintenance = filter_var($attributes['maintenance_mode'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $public = filter_var($attributes['public'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
-        return $maintenance === false;
+        return $maintenance === false && $public === true;
     }
 
     private function positiveInteger(mixed $value): ?int
@@ -198,8 +212,8 @@ final class HttpPterodactylApi implements PterodactylApi
             throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
         }
 
-        $maxMemory = $memoryOverallocate < 0 ? PHP_INT_MAX : $totalMemory + ($totalMemory * $memoryOverallocate / 100);
-        $maxDisk = $diskOverallocate < 0 ? PHP_INT_MAX : $totalDisk + ($totalDisk * $diskOverallocate / 100);
+        $maxMemory = $this->deploymentLimit($totalMemory, $memoryOverallocate);
+        $maxDisk = $this->deploymentLimit($totalDisk, $diskOverallocate);
 
         return [
             'memory' => (int) floor(max(0, $maxMemory - $allocatedMemory)),
@@ -230,12 +244,8 @@ final class HttpPterodactylApi implements PterodactylApi
             throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
         }
 
-        $maxMemory = $memoryOverallocate < 0
-            ? PHP_INT_MAX
-            : $totalMemory + ($totalMemory * $memoryOverallocate / 100);
-        $maxDisk = $diskOverallocate < 0
-            ? PHP_INT_MAX
-            : $totalDisk + ($totalDisk * $diskOverallocate / 100);
+        $maxMemory = $this->deploymentLimit($totalMemory, $memoryOverallocate);
+        $maxDisk = $this->deploymentLimit($totalDisk, $diskOverallocate);
 
         $freeMemory = max(0, $maxMemory - $allocatedMemory);
         $freeDisk = max(0, $maxDisk - $allocatedDisk);
@@ -244,6 +254,15 @@ final class HttpPterodactylApi implements PterodactylApi
             (int) floor($freeMemory / $memory),
             (int) floor($freeDisk / $disk),
         );
+    }
+
+    /**
+     * Mirrors FindViableNodesService: total * (1 + overallocate / 100).
+     * A negative overallocate is not treated as unlimited by deployment.
+     */
+    private function deploymentLimit(float $total, float $overallocate): float
+    {
+        return $total * (1 + ($overallocate / 100));
     }
 
     private function numeric(mixed $value): ?float
@@ -531,7 +550,7 @@ final class HttpPterodactylApi implements PterodactylApi
 
         $container = $attributes['container'] ?? null;
         if (is_array($container)) {
-            foreach (['image' => 'docker_image', 'startup' => 'startup', 'environment' => 'environment'] as $source => $target) {
+            foreach (['image' => 'docker_image', 'startup_command' => 'startup', 'environment' => 'environment'] as $source => $target) {
                 if (! array_key_exists($target, $attributes) && array_key_exists($source, $container)) {
                     $attributes[$target] = $container[$source];
                 }
@@ -558,6 +577,17 @@ final class HttpPterodactylApi implements PterodactylApi
         $relationships = is_array($resource['relationships'] ?? null) ? $resource['relationships'] : [];
         $included = is_array($payload['included'] ?? null) ? $payload['included'] : [];
 
+        // PterodactylSerializer::mergeIncludes() nests includes inside the
+        // resource attributes as {object, attributes} or {object: list, data}.
+        $attributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
+        $nested = is_array($attributes['relationships'] ?? null) ? $attributes['relationships'] : [];
+        foreach ($nested as $name => $relationship) {
+            if (! is_string($name) || ! is_array($relationship) || array_key_exists($name, $relationships)) {
+                continue;
+            }
+            $relationships[$name] = ['data' => $this->serializerRelationshipData($relationship)];
+        }
+
         foreach ($relationships as $name => $relationship) {
             if (! is_array($relationship) || ! array_key_exists('data', $relationship)) {
                 continue;
@@ -569,6 +599,40 @@ final class HttpPterodactylApi implements PterodactylApi
         }
 
         return $relationships;
+    }
+
+    /**
+     * @param  array<string, mixed>  $relationship
+     * @return list<array<string, mixed>>|array<string, mixed>|null
+     */
+    private function serializerRelationshipData(array $relationship): ?array
+    {
+        if (($relationship['object'] ?? null) === 'list') {
+            $items = $relationship['data'] ?? null;
+            if (! is_array($items) || ! array_is_list($items)) {
+                throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+            }
+
+            return array_map(function (mixed $item): array {
+                $resource = is_array($item) ? $this->serializerRelationshipData($item) : null;
+                if ($resource === null || array_is_list($resource)) {
+                    throw PterodactylProviderException::failed('pterodactyl::messages.errors.malformed');
+                }
+
+                return $resource;
+            }, $items);
+        }
+
+        $attributes = $relationship['attributes'] ?? null;
+        if (! is_array($attributes)) {
+            return null;
+        }
+
+        return [
+            'id' => $attributes['id'] ?? null,
+            'type' => $relationship['object'] ?? null,
+            'attributes' => $attributes,
+        ];
     }
 
     /** @param list<mixed> $included */

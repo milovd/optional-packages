@@ -74,9 +74,9 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
                 trim((string) $settings['node']),
                 trim((string) $settings['storage']),
             );
-            if ($this->numericCapacity($capacity['memory_free'] ?? null) === null
-                || $this->numericCapacity($capacity['cpu_cores'] ?? null) === null
-                || $this->numericCapacity($capacity['storage_free'] ?? null) === null
+            if ($this->numericCapacity($capacity['memory_free']) === null
+                || $this->numericCapacity($capacity['cpu_cores']) === null
+                || $this->numericCapacity($capacity['storage_free']) === null
             ) {
                 return HealthResult::fail('proxmox::messages.errors.malformed');
             }
@@ -189,9 +189,9 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
                 'cart' => __($exception->errorKey),
             ]);
         }
-        $memoryFree = $this->numericCapacity($capacity['memory_free'] ?? null);
-        $cpuCores = $this->numericCapacity($capacity['cpu_cores'] ?? null);
-        $storageFree = $this->numericCapacity($capacity['storage_free'] ?? null);
+        $memoryFree = $this->numericCapacity($capacity['memory_free']);
+        $cpuCores = $this->numericCapacity($capacity['cpu_cores']);
+        $storageFree = $this->numericCapacity($capacity['storage_free']);
         if ($memoryFree === null || $cpuCores === null || $storageFree === null) {
             throw ValidationException::withMessages([
                 'cart' => __('proxmox::messages.errors.malformed'),
@@ -243,9 +243,9 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
             ]);
         }
 
-        $memoryFree = $this->numericCapacity($capacity['memory_free'] ?? null);
-        $cpuCores = $this->numericCapacity($capacity['cpu_cores'] ?? null);
-        $storageFree = $this->numericCapacity($capacity['storage_free'] ?? null);
+        $memoryFree = $this->numericCapacity($capacity['memory_free']);
+        $cpuCores = $this->numericCapacity($capacity['cpu_cores']);
+        $storageFree = $this->numericCapacity($capacity['storage_free']);
         if ($memoryFree === null || $cpuCores === null || $storageFree === null) {
             throw ValidationException::withMessages([
                 'cart' => __('proxmox::messages.errors.malformed'),
@@ -281,7 +281,13 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
         $settings = $this->providerSettings($instance);
         $mapping = $this->mapping($instance->id);
         if ($mapping !== null) {
-            $this->ensureVmConfiguration($api, $instance, $mapping->node, $mapping->vmid, $settings, claimOwnership: false);
+            try {
+                $this->ensureVmConfiguration($api, $instance, $mapping->node, $mapping->vmid, $settings);
+            } catch (ProxmoxProviderException $exception) {
+                throw ValidationException::withMessages([
+                    'instance' => __($exception->errorKey),
+                ]);
+            }
 
             return;
         }
@@ -305,31 +311,27 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
                 if ($existingVmid === null) {
                     throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
                 }
-                $this->ensureVmConfiguration($api, $instance, $node, $existingVmid, $settings, claimOwnership: false);
+                // Only a VM carrying this instance's ownership marker is ever adopted.
+                $this->assertOwnedVmConfig($api, $instance->id, $node, $existingVmid);
                 $this->storeMapping($instance->id, $existingVmid, $node, $hostname, $externalId);
+                $this->ensureVmConfiguration($api, $instance, $node, $existingVmid, $settings);
 
                 return;
             }
 
             $vmid = max($api->nextVmId(), 100);
+            // The ownership marker is part of the clone request, so a VM whose clone task outlived
+            // the HTTP request or the poll budget is still recognisable as ours on retry.
             $api->cloneVm($node, $templateVmid, [
                 'newid' => $vmid,
                 'name' => $hostname,
+                'description' => $this->ownershipMarker($instance->id),
                 'full' => 1,
                 'storage' => $storage,
                 'target' => $node,
             ]);
-            try {
-                $this->ensureVmConfiguration($api, $instance, $node, $vmid, $settings, claimOwnership: true);
-            } catch (Throwable $exception) {
-                try {
-                    $api->deleteVm($node, $vmid);
-                } catch (ProxmoxProviderException $cleanupException) {
-                    report($cleanupException);
-                }
-                throw $exception;
-            }
             $this->storeMapping($instance->id, $vmid, $node, $hostname, $externalId);
+            $this->ensureVmConfiguration($api, $instance, $node, $vmid, $settings);
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (ProxmoxProviderException $exception) {
@@ -377,7 +379,7 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
         try {
             $this->assertOwnedVmConfig($api, $instance->id, $mapping->node, $mapping->vmid);
             $api->updateConfig($mapping->node, $mapping->vmid, ['onboot' => 1]);
-            $api->start($mapping->node, $mapping->vmid);
+            $this->startIfNotRunning($api, $mapping->node, $mapping->vmid);
             $this->assertConfigValue($api, $mapping->node, $mapping->vmid, 'onboot', 1);
             $this->assertPowerState($api, $mapping->node, $mapping->vmid, 'running');
             $mapping->power_status = 'running';
@@ -392,26 +394,65 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
     public function terminate(ServiceInstanceInfo $instance): void
     {
         $mapping = $this->mapping($instance->id);
-        if ($mapping === null) {
-            return;
-        }
-
         $api = $this->apiFor($instance);
+
         try {
-            $this->assertOwnedVmConfig($api, $instance->id, $mapping->node, $mapping->vmid);
-            $api->deleteVm($mapping->node, $mapping->vmid);
-            if ($api->findVmConfig($mapping->node, $mapping->vmid) !== null) {
-                throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
+            if ($mapping === null) {
+                $this->terminateUnmappedOwnedVm($api, $instance);
+
+                return;
+            }
+
+            $config = $api->findVmConfig($mapping->node, $mapping->vmid);
+            if ($config !== null) {
+                if (($config['description'] ?? null) !== $this->ownershipMarker($instance->id)) {
+                    throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
+                }
+                $this->deleteAndVerify($api, $mapping->node, $mapping->vmid);
             }
         } catch (ProxmoxProviderException $exception) {
-            if ($exception->status !== 404) {
-                throw ValidationException::withMessages([
-                    'instance' => __($exception->errorKey),
-                ]);
-            }
+            throw ValidationException::withMessages([
+                'instance' => __($exception->errorKey),
+            ]);
         }
 
         $mapping->delete();
+    }
+
+    /**
+     * A clone can succeed while the mapping write never happens (timeout, crash). Such a VM is
+     * found by its deterministic name and deleted only when it carries this instance's marker.
+     */
+    private function terminateUnmappedOwnedVm(ProxmoxApi $api, ServiceInstanceInfo $instance): void
+    {
+        $node = $this->node($instance);
+        if ($node === '') {
+            return;
+        }
+
+        $existing = $api->findVmByName($node, $this->hostname($instance));
+        if ($existing === null) {
+            return;
+        }
+        $vmid = $this->canonicalPositiveInteger($existing['vmid'] ?? null);
+        if ($vmid === null) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+        }
+
+        $config = $api->findVmConfig($node, $vmid);
+        if ($config === null || ($config['description'] ?? null) !== $this->ownershipMarker($instance->id)) {
+            return;
+        }
+
+        $this->deleteAndVerify($api, $node, $vmid);
+    }
+
+    private function deleteAndVerify(ProxmoxApi $api, string $node, int $vmid): void
+    {
+        $api->deleteVm($node, $vmid);
+        if ($api->findVmConfig($node, $vmid) !== null) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
+        }
     }
 
     /** @param string|array<string, mixed> $plan */
@@ -430,7 +471,7 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
         $api = $this->apiFor($instance);
 
         try {
-            $this->ensureVmConfiguration($api, $instance, $mapping->node, $mapping->vmid, $settings, claimOwnership: false);
+            $this->ensureVmConfiguration($api, $instance, $mapping->node, $mapping->vmid, $settings);
         } catch (ProxmoxProviderException $exception) {
             throw ValidationException::withMessages([
                 'instance' => __($exception->errorKey),
@@ -480,6 +521,8 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
             }
         }
 
+        // Sync is strictly read-only towards Proxmox: it never reconfigures, starts or stops a VM,
+        // so a suspended or customer-stopped VM keeps its power state.
         try {
             $config = $api->findVmConfig($mapping->node, $mapping->vmid);
             if ($config === null) {
@@ -492,40 +535,16 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
                     providerKey: $this->id(),
                     externalRef: $instance->externalRef,
                     meta: array_merge($instance->meta, ['provider_reconciliation' => 'absent']),
-                        serverSettings: $instance->serverSettings,
-                        providerSettings: $instance->providerSettings,
+                    serverSettings: $instance->serverSettings,
+                    providerSettings: $instance->providerSettings,
                 );
             }
             if (($config['description'] ?? null) !== $this->ownershipMarker($instance->id)) {
                 throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
             }
 
-            $this->ensureVmConfiguration(
-                $api,
-                $instance,
-                $mapping->node,
-                $mapping->vmid,
-                $this->providerSettings($instance),
-                claimOwnership: false,
-            );
-
             $status = $api->currentStatus($mapping->node, $mapping->vmid);
         } catch (ProxmoxProviderException $exception) {
-            if ($exception->status === 404) {
-                $mapping->delete();
-
-                return new ServiceInstanceInfo(
-                    id: $instance->id,
-                    label: $instance->label,
-                    status: 'terminated',
-                    providerKey: $this->id(),
-                    externalRef: $instance->externalRef,
-                    meta: array_merge($instance->meta, ['provider_reconciliation' => 'absent']),
-                        serverSettings: $instance->serverSettings,
-                        providerSettings: $instance->providerSettings,
-                );
-            }
-
             throw ValidationException::withMessages([
                 'instance' => __($exception->errorKey),
             ]);
@@ -534,12 +553,20 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
         $mapping->power_status = (string) ($status['status'] ?? $mapping->power_status);
         $mapping->save();
 
-        $suspended = $mapping->power_status === 'stopped' && ! $this->boolSetting($this->providerSettings($instance), 'autostart');
+        $lifecycle = ProxmoxStatusMapper::lifecycleStatus($status, $instance->status === 'suspended');
+        if ($lifecycle === 'active'
+            && $instance->status !== 'active'
+            && ! $this->vmConfigurationMatches($instance, $config, $this->providerSettings($instance))
+        ) {
+            // The VM exists but was never fully configured (for example a clone that timed out):
+            // keep the current lifecycle state so provisioning is retried instead of activated.
+            $lifecycle = $instance->status;
+        }
 
         return new ServiceInstanceInfo(
             id: $instance->id,
             label: $instance->label,
-            status: ProxmoxStatusMapper::lifecycleStatus($status, $suspended),
+            status: $lifecycle,
             providerKey: $this->id(),
             externalRef: (string) $mapping->vmid,
             meta: array_merge($instance->meta, [
@@ -549,7 +576,7 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
                 ],
             ]),
             serverSettings: $instance->serverSettings,
-                        providerSettings: $instance->providerSettings,
+            providerSettings: $instance->providerSettings,
         );
     }
 
@@ -580,7 +607,7 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
         try {
             $this->assertOwnedVmConfig($api, $instance->id, $mapping->node, $mapping->vmid);
             if ($actionId === 'start') {
-                $api->start($mapping->node, $mapping->vmid);
+                $this->startIfNotRunning($api, $mapping->node, $mapping->vmid);
             } elseif ($actionId === 'stop') {
                 $api->stop($mapping->node, $mapping->vmid);
             } else {
@@ -661,36 +688,35 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
         return HealthResult::ok(__('proxmox::messages.health.ok', ['url' => $url]));
     }
 
-    /** @param array<string, mixed> $currentConfig @return array<string, int|string> */
+    /**
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $currentConfig
+     * @return array<string, int|string>
+     */
     private function desiredVmConfig(ServiceInstanceInfo $instance, array $settings, array $currentConfig): array
     {
-        $diskKey = $this->diskConfigKey($currentConfig);
         $networkKey = $this->networkConfigKey($currentConfig);
         if ($networkKey === null) {
             throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
         }
+        $keepPoweredOff = $instance->status === 'suspended';
 
         return [
             'cores' => $this->intSetting($settings, 'cores') ?? 1,
             'sockets' => $this->intSetting($settings, 'sockets') ?? 1,
             'memory' => $this->intSetting($settings, 'memory') ?? 1024,
             'cpu' => trim((string) ($settings['cpu_type'] ?? '')) !== '' ? trim((string) $settings['cpu_type']) : 'host',
-            $diskKey => $this->diskConfigValue(
-                $currentConfig[$diskKey] ?? null,
-                $this->storage($instance),
-                $this->intSetting($settings, 'disk') ?? 20,
-            ),
             $networkKey => $this->networkConfigValue(
                 $currentConfig[$networkKey] ?? null,
                 trim((string) ($settings['bridge'] ?? '')) !== '' ? trim((string) $settings['bridge']) : 'vmbr0',
             ),
-            'onboot' => $this->boolSetting($settings, 'autostart') ? 1 : 0,
+            'onboot' => ! $keepPoweredOff && $this->boolSetting($settings, 'autostart') ? 1 : 0,
             'description' => $this->ownershipMarker($instance->id),
         ];
     }
 
-    /** @param array<string, mixed> $config @param array<string, int|string> $desired */
-    private function ensureVmConfiguration(ProxmoxApi $api, ServiceInstanceInfo $instance, string $node, int $vmid, array $settings, bool $claimOwnership): void
+    /** @param array<string, mixed> $settings */
+    private function ensureVmConfiguration(ProxmoxApi $api, ServiceInstanceInfo $instance, string $node, int $vmid, array $settings): void
     {
         if ($this->node($instance) === '' || $this->node($instance) !== $node) {
             throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
@@ -702,40 +728,141 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
         }
 
         $marker = $this->ownershipMarker($instance->id);
-        if (! $claimOwnership && ($config['description'] ?? null) !== $marker) {
+        if (($config['description'] ?? null) !== $marker) {
             throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
         }
 
         $desired = $this->desiredVmConfig($instance, $settings, $config);
-        $needsUpdate = $claimOwnership;
         foreach ($desired as $key => $value) {
             if (! $this->sameVmConfigValue($config[$key] ?? null, $value)) {
-                $needsUpdate = true;
+                $api->updateConfig($node, $vmid, $desired);
                 break;
             }
         }
-        if ($needsUpdate) {
-            $api->updateConfig($node, $vmid, $desired);
+
+        // Disk growth goes through the dedicated resize endpoint; editing size= in the config
+        // only rewrites metadata. Proxmox VE cannot shrink disks, so a smaller target fails closed.
+        $diskKey = $this->bootDiskKey($config);
+        $currentBytes = $this->diskSizeBytes($config[$diskKey] ?? null);
+        $desiredGb = $this->desiredDiskGb($settings);
+        $this->assertDiskStorage($config[$diskKey] ?? null, $this->storage($instance));
+        if ($currentBytes > $desiredGb * 1024 ** 3) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
+        }
+        if ($currentBytes < $desiredGb * 1024 ** 3) {
+            $api->resizeDisk($node, $vmid, $diskKey, $desiredGb.'G');
         }
 
         $verified = $api->findVmConfig($node, $vmid);
-        if ($verified === null || ($verified['description'] ?? null) !== $marker) {
+        if ($verified === null || ! $this->vmConfigurationMatches($instance, $verified, $settings)) {
             throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
         }
-        foreach ($desired as $key => $value) {
-            if (! $this->sameVmConfigValue($verified[$key] ?? null, $value)) {
-                throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
+
+        if ($instance->status !== 'suspended' && $this->boolSetting($settings, 'autostart')) {
+            $this->startIfNotRunning($api, $node, $vmid);
+            $this->assertPowerState($api, $node, $vmid, 'running');
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $settings
+     */
+    private function vmConfigurationMatches(ServiceInstanceInfo $instance, array $config, array $settings): bool
+    {
+        try {
+            if (($config['description'] ?? null) !== $this->ownershipMarker($instance->id)) {
+                return false;
             }
+            foreach ($this->desiredVmConfig($instance, $settings, $config) as $key => $value) {
+                if (! $this->sameVmConfigValue($config[$key] ?? null, $value)) {
+                    return false;
+                }
+            }
+            $diskKey = $this->bootDiskKey($config);
+
+            return $this->diskSizeBytes($config[$diskKey] ?? null) === $this->desiredDiskGb($settings) * 1024 ** 3;
+        } catch (ProxmoxProviderException) {
+            return false;
+        }
+    }
+
+    private function startIfNotRunning(ProxmoxApi $api, string $node, int $vmid): void
+    {
+        // Proxmox VE fails a start task with "VM <vmid> already running", so retries must skip it.
+        if (strtolower((string) ($api->currentStatus($node, $vmid)['status'] ?? '')) !== 'running') {
+            $api->start($node, $vmid);
+        }
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function desiredDiskGb(array $settings): int
+    {
+        $disk = $this->intSetting($settings, 'disk') ?? 20;
+        if ($disk < 1) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.invalid_mapping');
         }
 
-        if ($this->boolSetting($settings, 'autostart')) {
-            $status = strtolower((string) ($api->currentStatus($node, $vmid)['status'] ?? ''));
-            if ($status !== 'running') {
-                $api->start($node, $vmid);
+        return $disk;
+    }
+
+    /**
+     * The disk to size is the first disk in the boot order that is not a CD-ROM or cloud-init
+     * drive; without a usable boot order the lowest numbered scsi, virtio, sata, ide disk is used.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function bootDiskKey(array $config): string
+    {
+        $candidates = [];
+        $boot = is_string($config['boot'] ?? null) ? $config['boot'] : '';
+        if (preg_match('/(?:\A|,)order=([^,]*)/', $boot, $matches) === 1) {
+            $candidates = explode(';', $matches[1]);
+        }
+        foreach (['scsi', 'virtio', 'sata', 'ide'] as $bus) {
+            $keys = array_filter(
+                array_keys($config),
+                static fn ($key): bool => preg_match('/\A'.$bus.'\d+\z/', (string) $key) === 1,
+            );
+            usort($keys, static fn (string $left, string $right): int => (int) substr($left, strlen($bus)) <=> (int) substr($right, strlen($bus)));
+            array_push($candidates, ...$keys);
+        }
+
+        foreach ($candidates as $key) {
+            $key = trim((string) $key);
+            if (preg_match('/\A(?:scsi|virtio|sata|ide)\d+\z/', $key) !== 1 || ! is_string($config[$key] ?? null)) {
+                continue;
             }
-            if (strtolower((string) ($api->currentStatus($node, $vmid)['status'] ?? '')) !== 'running') {
-                throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
+            $value = strtolower($config[$key]);
+            if (str_contains($value, 'media=cdrom') || str_contains($value, 'cloudinit') || str_starts_with($value, 'none')) {
+                continue;
             }
+
+            return $key;
+        }
+
+        throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+    }
+
+    private function diskSizeBytes(mixed $value): int
+    {
+        if (! is_string($value)
+            || preg_match('/(?:\A|,)size=(\d+(?:\.\d+)?)([KMGT]?)(?:,|\z)/i', trim($value), $matches) !== 1
+        ) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+        }
+
+        $exponent = ['' => 0, 'K' => 1, 'M' => 2, 'G' => 3, 'T' => 4][strtoupper($matches[2])];
+
+        return (int) round((float) $matches[1] * 1024 ** $exponent);
+    }
+
+    private function assertDiskStorage(mixed $value, string $storage): void
+    {
+        $descriptor = is_string($value) ? trim(explode(',', $value, 2)[0]) : '';
+        $currentStorage = trim(explode(':', $descriptor, 2)[0]);
+        if ($storage === '' || $currentStorage === '' || $currentStorage !== $storage) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
         }
     }
 
@@ -767,59 +894,15 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
     }
 
     /** @param array<string, mixed> $config */
-    private function diskConfigKey(array $config): string
-    {
-        foreach (array_keys($config) as $key) {
-            if (is_string($key) && preg_match('/\A(?:scsi|virtio|sata|ide)\d+\z/', $key) === 1) {
-                return $key;
-            }
-        }
-
-        return 'scsi0';
-    }
-
-    /** @param array<string, mixed> $config */
     private function networkConfigKey(array $config): ?string
     {
         foreach (array_keys($config) as $key) {
-            if (is_string($key) && preg_match('/\Anet\d+\z/', $key) === 1) {
+            if (preg_match('/\Anet\d+\z/', (string) $key) === 1) {
                 return $key;
             }
         }
 
         return null;
-    }
-
-    private function diskConfigValue(mixed $current, string $storage, int $sizeGb): string
-    {
-        if ($sizeGb < 1 || $storage === '') {
-            throw ProxmoxProviderException::failed('proxmox::messages.errors.invalid_mapping');
-        }
-
-        $value = is_string($current) ? trim($current) : '';
-        if ($value === '') {
-            return $storage.':'.$sizeGb.'G';
-        }
-
-        $parts = explode(',', $value);
-        $hasSize = false;
-        foreach ($parts as $index => $part) {
-            if (str_starts_with(strtolower(trim($part)), 'size=')) {
-                $parts[$index] = 'size='.$sizeGb.'G';
-                $hasSize = true;
-            }
-        }
-        if (! $hasSize) {
-            $parts[] = 'size='.$sizeGb.'G';
-        }
-
-        $diskDescriptor = trim((string) ($parts[0] ?? ''));
-        $currentStorage = trim((string) (explode(':', $diskDescriptor, 2)[0] ?? ''));
-        if ($currentStorage !== '' && $currentStorage !== $storage) {
-            throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
-        }
-
-        return implode(',', $parts);
     }
 
     private function networkConfigValue(mixed $current, string $bridge): string
@@ -890,16 +973,13 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
     /** @return array<string, mixed> */
     private function providerSettings(ServiceInstanceInfo $instance): array
     {
-        $settings = $instance->providerSettings ?? [];
-
-        return is_array($settings) ? $settings : [];
+        return $instance->providerSettings ?? [];
     }
 
     /** @return array<string, mixed> */
     private function connectionSettings(ServiceInstanceInfo $instance): array
     {
         $settings = $instance->serverSettings ?? [];
-        $settings = is_array($settings) ? $settings : [];
         if (($instance->meta['server_settings_required'] ?? false) === true
             && ! $this->hasRequiredServerSettings($settings, ['api_url', 'token_user', 'token_id', 'token_secret', 'node', 'storage'])
         ) {

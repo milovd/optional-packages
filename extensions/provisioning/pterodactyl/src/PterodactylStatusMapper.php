@@ -14,11 +14,19 @@ final class PterodactylStatusMapper
         if (! array_key_exists('suspended', $server) || ! is_bool($server['suspended'])) {
             return 'manual_review';
         }
+        if (! array_key_exists('status', $server) || ! (is_string($server['status']) || $server['status'] === null)) {
+            return 'manual_review';
+        }
         $suspended = $server['suspended'];
-        $status = strtolower((string) ($server['status'] ?? ''));
+        $status = strtolower((string) $server['status']);
 
         if ($suspended || $status === 'suspended') {
             return 'suspended';
+        }
+
+        // The panel clears status to null once installation succeeds.
+        if ($server['status'] === null) {
+            return 'active';
         }
 
         if ($status === '' || ! in_array($status, ['active', 'installing', 'restoring_backup', 'install_failed'], true)) {
@@ -29,7 +37,6 @@ final class PterodactylStatusMapper
             'active' => 'active',
             'installing', 'restoring_backup' => 'provisioning',
             'install_failed' => 'failed',
-            default => 'active',
         };
     }
 

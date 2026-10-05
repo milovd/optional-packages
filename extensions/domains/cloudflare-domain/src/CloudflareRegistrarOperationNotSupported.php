@@ -6,6 +6,4 @@ namespace Agovena\Extensions\CloudflareDomain;
 
 use RuntimeException;
 
-final class CloudflareRegistrarOperationNotSupported extends RuntimeException
-{
-}
+final class CloudflareRegistrarOperationNotSupported extends RuntimeException {}

@@ -4,23 +4,31 @@ declare(strict_types=1);
 
 namespace Agovena\Modules\Domains\Http\Livewire\Customer;
 
-use Agovena\Modules\Domains\DomainService;
 use Agovena\Modules\Domains\DomainDnsProviderRegistry;
+use Agovena\Modules\Domains\DomainService;
 use Agovena\Modules\Domains\Models\DomainRegistration;
 use App\Agovena\Theme\ThemeManager;
 use App\Models\Customer;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Livewire\Component;
+use RuntimeException;
 
 final class DomainShow extends Component
 {
     public DomainRegistration $registration;
 
     public string $recordId = '';
+
     public string $recordType = 'A';
+
     public string $recordName = '@';
+
     public string $recordContent = '';
+
     public int $recordTtl = 3600;
+
+    public int $recordPriority = 10;
 
     public function mount(DomainRegistration $registration): void
     {
@@ -37,22 +45,36 @@ final class DomainShow extends Component
             'recordName' => ['required', 'string', 'max:253'],
             'recordContent' => ['required', 'string', 'max:2048'],
             'recordTtl' => ['required', 'integer', 'min:60', 'max:86400'],
+            'recordPriority' => ['exclude_unless:recordType,MX', 'required', 'integer', 'min:0', 'max:65535'],
         ]);
         $provider = $providers->get((string) $this->registration->dns_provider_key);
         if ($provider === null || ! in_array('records', $provider->capabilities(), true)) {
             throw ValidationException::withMessages(['recordContent' => __('domains::customer.dns_unavailable')]);
         }
-        $domains->upsertDnsRecord($this->registration, [
+        $record = [
             'id' => $this->recordId,
             'type' => $this->recordType,
             'name' => $this->recordName,
             'content' => $this->recordContent,
             'ttl' => $this->recordTtl,
-        ]);
+        ];
+        if ($this->recordType === 'MX') {
+            $record['priority'] = $this->recordPriority;
+        }
+        try {
+            $domains->upsertDnsRecord($this->registration, $record);
+        } catch (InvalidArgumentException) {
+            throw ValidationException::withMessages(['recordContent' => __('domains::customer.record_rejected')]);
+        } catch (RuntimeException $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages(['recordContent' => __('domains::customer.dns_failed')]);
+        }
         $this->reset('recordId', 'recordContent');
         $this->recordType = 'A';
         $this->recordName = '@';
         $this->recordTtl = 3600;
+        $this->recordPriority = 10;
         $this->registration->refresh();
         session()->flash('status', __('domains::customer.dns_saved'));
     }
@@ -64,11 +86,18 @@ final class DomainShow extends Component
         $this->recordName = (string) ($record['name'] ?? '@');
         $this->recordContent = (string) ($record['content'] ?? '');
         $this->recordTtl = (int) ($record['ttl'] ?? 3600);
+        $this->recordPriority = (int) ($record['priority'] ?? 10);
     }
 
     public function deleteRecord(string $id, DomainService $domains): void
     {
-        $domains->deleteDnsRecord($this->registration, $id);
+        try {
+            $domains->deleteDnsRecord($this->registration, $id);
+        } catch (InvalidArgumentException|RuntimeException $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages(['recordContent' => __('domains::customer.dns_failed')]);
+        }
         $this->registration->refresh();
         session()->flash('status', __('domains::customer.dns_deleted'));
     }

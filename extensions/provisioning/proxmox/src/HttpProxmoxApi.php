@@ -9,6 +9,7 @@ use App\Agovena\Security\OutboundHttpUrlValidator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 final class HttpProxmoxApi implements ProxmoxApi
@@ -92,6 +93,27 @@ final class HttpProxmoxApi implements ProxmoxApi
         $this->request('PUT', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/config', body: $payload);
     }
 
+    public function resizeDisk(string $node, int $vmid, string $disk, string $size): void
+    {
+        if (preg_match('/\A(?:scsi|virtio|sata|ide)\d+\z/', $disk) !== 1
+            || preg_match('/\A\+?\d+(?:\.\d+)?[KMGT]?\z/', $size) !== 1
+        ) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.invalid_mapping');
+        }
+
+        $response = $this->request(
+            'PUT',
+            '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/resize',
+            body: ['disk' => $disk, 'size' => $size],
+        );
+        // Older Proxmox VE releases resize synchronously and return null; current ones return a UPID.
+        if (($response['data'] ?? null) === null) {
+            return;
+        }
+
+        $this->waitForTask($node, $this->taskId($response, 'resize'), maxAttempts: 120);
+    }
+
     public function start(string $node, int $vmid): void
     {
         $response = $this->request('POST', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/status/start');
@@ -106,32 +128,13 @@ final class HttpProxmoxApi implements ProxmoxApi
 
     public function deleteVm(string $node, int $vmid): void
     {
-        $shouldStop = true;
-        try {
-            $status = $this->currentStatus($node, $vmid)['status'];
-            if ($status === 'stopped') {
-                $shouldStop = false;
-            } elseif ($status !== 'running') {
-                throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed');
-            }
-        } catch (ProxmoxProviderException $exception) {
-            if ($exception->status !== 404) {
-                throw $exception;
-            }
-        }
-
-        if (! $shouldStop) {
-            $this->deleteAndWait($node, $vmid);
-
+        if ($this->locateVm($node, $vmid) === null) {
             return;
         }
 
-        try {
+        $status = $this->currentStatus($node, $vmid)['status'];
+        if ($status !== 'stopped') {
             $this->stop($node, $vmid);
-        } catch (ProxmoxProviderException $exception) {
-            if ($exception->status !== 404) {
-                throw $exception;
-            }
         }
 
         $this->deleteAndWait($node, $vmid);
@@ -140,7 +143,9 @@ final class HttpProxmoxApi implements ProxmoxApi
     private function deleteAndWait(string $node, int $vmid): void
     {
         try {
-            $response = $this->request('DELETE', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid);
+            // purge drops the VMID from HA, backup and replication configs; Proxmox refuses to
+            // destroy an HA-managed VM without it. DELETE parameters travel in the query string.
+            $response = $this->request('DELETE', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid, query: ['purge' => 1]);
         } catch (ProxmoxProviderException $exception) {
             if ($exception->status === 404) {
                 return;
@@ -176,14 +181,15 @@ final class HttpProxmoxApi implements ProxmoxApi
             throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
         }
         foreach ($items as $item) {
-            if (! is_array($item) || ! array_key_exists('name', $item) || ! array_key_exists('vmid', $item)) {
+            if (! is_array($item) || ! array_key_exists('vmid', $item)) {
                 throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
             }
             $vmid = $this->positiveVmid($item['vmid']);
             if ($vmid === null) {
                 throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
             }
-            if ((string) $item['name'] !== $name) {
+            // "name" is optional in the documented VM index schema.
+            if (! is_string($item['name'] ?? null) || $item['name'] !== $name) {
                 continue;
             }
 
@@ -195,6 +201,12 @@ final class HttpProxmoxApi implements ProxmoxApi
 
     public function findVmConfig(string $node, int $vmid): ?array
     {
+        // Proxmox VE answers HTTP 500 "Configuration file ... does not exist" for an absent VMID,
+        // so absence is decided from the cluster-wide resource index, never from an error status.
+        if ($this->locateVm($node, $vmid) === null) {
+            return null;
+        }
+
         try {
             $response = $this->request('GET', '/nodes/'.rawurlencode($node).'/qemu/'.$vmid.'/config');
             $data = $response['data'] ?? null;
@@ -210,6 +222,44 @@ final class HttpProxmoxApi implements ProxmoxApi
 
             throw $exception;
         }
+    }
+
+    /**
+     * Returns the cluster resource entry for a QEMU VMID on the expected node, or null when the
+     * VMID is not present anywhere in the cluster. A VMID that exists elsewhere (another node,
+     * or as a container) fails closed instead of being reported as absent.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function locateVm(string $node, int $vmid): ?array
+    {
+        $items = $this->request('GET', '/cluster/resources', query: ['type' => 'vm'])['data'] ?? null;
+        if (! is_array($items) || ! array_is_list($items)) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+        }
+
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+            }
+            if (! array_key_exists('vmid', $item)) {
+                continue;
+            }
+            $itemVmid = $this->positiveVmid($item['vmid']);
+            if ($itemVmid === null) {
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.malformed');
+            }
+            if ($itemVmid !== $vmid) {
+                continue;
+            }
+            if (($item['type'] ?? null) !== 'qemu' || ($item['node'] ?? null) !== $node) {
+                throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed', 409);
+            }
+
+            return $item;
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $response */
@@ -239,10 +289,11 @@ final class HttpProxmoxApi implements ProxmoxApi
             $status = (string) (($response['data']['status'] ?? '') ?: '');
             if ($status === 'stopped') {
                 $taskData = $response['data'] ?? null;
+                // pve-common PVE::UPID::status_is_error: only "OK" and "WARNINGS: <n>" are successful.
                 if (! is_array($taskData)
                     || ! array_key_exists('exitstatus', $taskData)
                     || ! is_string($taskData['exitstatus'])
-                    || $taskData['exitstatus'] !== 'OK'
+                    || ($taskData['exitstatus'] !== 'OK' && preg_match('/\AWARNINGS: \d+\z/', $taskData['exitstatus']) !== 1)
                 ) {
                     throw ProxmoxProviderException::failed('proxmox::messages.errors.create_failed');
                 }
@@ -274,7 +325,7 @@ final class HttpProxmoxApi implements ProxmoxApi
         }
         try {
             $this->urlValidator->assertTlsVerification($verify);
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             throw ProxmoxProviderException::failed('proxmox::messages.errors.invalid_mapping');
         }
 
@@ -292,7 +343,7 @@ final class HttpProxmoxApi implements ProxmoxApi
                 'GET' => $pending->get($url, $query),
                 'POST' => $pending->post($url, $body ?? []),
                 'PUT' => $pending->put($url, $body ?? []),
-                'DELETE' => $pending->delete($url, $body ?? []),
+                'DELETE' => $pending->delete($query === [] ? $url : $url.'?'.http_build_query($query)),
                 default => throw ProxmoxProviderException::failed('proxmox::messages.errors.provider_failed'),
             };
         } catch (ProxmoxProviderException $exception) {

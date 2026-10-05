@@ -11,7 +11,16 @@ use RuntimeException;
 
 final class CloudflareDnsProvider implements DomainDnsProvider
 {
-    private const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'SRV', 'TXT', 'CAA'];
+    /**
+     * Record types whose Cloudflare create/overwrite schema is fully expressed by
+     * name/content/ttl (plus priority for MX). SRV, CAA and other data-object types
+     * are refused rather than sent with an incomplete payload.
+     */
+    private const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT'];
+
+    private const PROXIABLE_TYPES = ['A', 'AAAA', 'CNAME'];
+
+    private const DOMAIN_PATTERN = '/\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+\z/';
 
     public function __construct(
         private readonly CloudflareDnsApi $api,
@@ -22,9 +31,10 @@ final class CloudflareDnsProvider implements DomainDnsProvider
         return 'cloudflare-dns';
     }
 
+    /** Capability names match the ones DomainService and the customer DNS screen check. */
     public function capabilities(): array
     {
-        return ['zone_management', 'record_management'];
+        return ['zone_management', 'records'];
     }
 
     public function ensureZone(DomainRegistration $registration): array
@@ -35,6 +45,9 @@ final class CloudflareDnsProvider implements DomainDnsProvider
         if ($reference === '') {
             throw new RuntimeException('Cloudflare did not return a DNS zone reference.');
         }
+        if (strtolower((string) ($zone['name'] ?? '')) !== $domain) {
+            throw new RuntimeException('Cloudflare returned a DNS zone for a different domain.');
+        }
 
         return [
             'zone_reference' => $reference,
@@ -43,7 +56,7 @@ final class CloudflareDnsProvider implements DomainDnsProvider
                 : [],
             'status' => isset($zone['status']) ? (string) $zone['status'] : null,
             'meta' => [
-                'domain' => (string) ($zone['name'] ?? $domain),
+                'domain' => $domain,
             ],
         ];
     }
@@ -56,7 +69,7 @@ final class CloudflareDnsProvider implements DomainDnsProvider
     public function upsertRecord(DomainRegistration $registration, array $record): array
     {
         $zoneReference = $this->zoneReference($registration);
-        $payload = $this->validateRecord($record);
+        $payload = $this->validateRecord($record, $this->domain($registration));
         $recordReference = isset($record['id']) ? trim((string) $record['id']) : '';
 
         if ($recordReference !== '') {
@@ -79,7 +92,7 @@ final class CloudflareDnsProvider implements DomainDnsProvider
     private function domain(DomainRegistration $registration): string
     {
         $domain = strtolower(rtrim(trim((string) $registration->domain_name), '.'));
-        if ($domain === '' || ! preg_match('/\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+\z/', $domain)) {
+        if ($domain === '' || ! preg_match(self::DOMAIN_PATTERN, $domain)) {
             throw new InvalidArgumentException('A fully qualified ASCII domain is required.');
         }
 
@@ -98,19 +111,22 @@ final class CloudflareDnsProvider implements DomainDnsProvider
         return $reference;
     }
 
-    /** @param array<string, mixed> $record @return array{type: string, name: string, content: string, ttl: int, proxied: bool} */
-    private function validateRecord(array $record): array
+    /**
+     * Cloudflare documents `name` as the complete record name including the zone name,
+     * so relative names and `@` are expanded inside the registration's zone.
+     *
+     * @param  array<string, mixed>  $record
+     * @return array<string, mixed>
+     */
+    private function validateRecord(array $record, string $domain): array
     {
         $type = strtoupper(trim((string) ($record['type'] ?? '')));
-        $name = strtolower(rtrim(trim((string) ($record['name'] ?? '')), '.'));
+        $name = $this->completeName((string) ($record['name'] ?? ''), $domain);
         $content = trim((string) ($record['content'] ?? ''));
         $ttl = (int) ($record['ttl'] ?? 3600);
 
         if (! in_array($type, self::RECORD_TYPES, true)) {
             throw new InvalidArgumentException('This DNS record type is not supported.');
-        }
-        if ($name === '' || strlen($name) > 253 || str_contains($name, "\r") || str_contains($name, "\n")) {
-            throw new InvalidArgumentException('A valid DNS record name is required.');
         }
         if ($content === '' || strlen($content) > 4096 || str_contains($content, "\r") || str_contains($content, "\n")) {
             throw new InvalidArgumentException('A valid DNS record value is required.');
@@ -118,17 +134,48 @@ final class CloudflareDnsProvider implements DomainDnsProvider
         if ($ttl !== 1 && ($ttl < 60 || $ttl > 86400)) {
             throw new InvalidArgumentException('DNS TTL must be 1 or between 60 and 86400 seconds.');
         }
-        if (in_array($type, ['A', 'AAAA'], true) && filter_var($content, FILTER_VALIDATE_IP) === false) {
-            throw new InvalidArgumentException('An IP address is required for this DNS record type.');
+        if ($type === 'A' && filter_var($content, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            throw new InvalidArgumentException('An IPv4 address is required for an A record.');
+        }
+        if ($type === 'AAAA' && filter_var($content, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+            throw new InvalidArgumentException('An IPv6 address is required for an AAAA record.');
         }
 
-        return [
+        $payload = [
             'type' => $type,
             'name' => $name,
             'content' => $content,
             'ttl' => $ttl,
-            'proxied' => (bool) ($record['proxied'] ?? false),
+            'proxied' => in_array($type, self::PROXIABLE_TYPES, true) && (bool) ($record['proxied'] ?? false),
         ];
+
+        if ($type === 'MX') {
+            $priority = filter_var($record['priority'] ?? null, FILTER_VALIDATE_INT, [
+                'options' => ['min_range' => 0, 'max_range' => 65535],
+            ]);
+            if (! is_int($priority)) {
+                throw new InvalidArgumentException('MX records require a priority between 0 and 65535.');
+            }
+            $payload['priority'] = $priority;
+        }
+
+        return $payload;
+    }
+
+    private function completeName(string $name, string $domain): string
+    {
+        $name = strtolower(rtrim(trim($name), '.'));
+        if ($name === '' || $name === '@') {
+            return $domain;
+        }
+        if ($name !== $domain && ! str_ends_with($name, '.'.$domain)) {
+            $name .= '.'.$domain;
+        }
+        if (strlen($name) > 253 || ! preg_match('/\A(?:\*\.)?(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z/', $name)) {
+            throw new InvalidArgumentException('A valid DNS record name is required.');
+        }
+
+        return $name;
     }
 
     private function validateReference(string $reference): void

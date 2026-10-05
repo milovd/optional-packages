@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Agovena\Modules\Domains;
 
-use Agovena\Modules\Domains\Contracts\DomainRegistrar;
 use Agovena\Modules\Domains\Contracts\DomainDnsProvider;
+use Agovena\Modules\Domains\Contracts\DomainRegistrar;
+use Agovena\Modules\Domains\Contracts\RefreshesRegistrationStatus;
 use Agovena\Modules\Domains\Enums\DomainRegistrationStatus;
 use Agovena\Modules\Domains\Models\DomainRegistration;
 use App\Models\Order;
@@ -114,6 +115,30 @@ final class DomainService
             $this->markFailed($registration, $exception);
             throw $exception;
         }
+    }
+
+    /**
+     * Reads the registrar's status for a registration that is still being processed.
+     * A failed lookup leaves the registration untouched so the next run can retry.
+     */
+    public function refreshRegistration(DomainRegistration $registration): DomainRegistration
+    {
+        if ($registration->status !== DomainRegistrationStatus::Registering) {
+            return $registration;
+        }
+
+        $registrar = $this->registrarFor($registration, 'registration');
+        if (! $registrar instanceof RefreshesRegistrationStatus) {
+            return $registration;
+        }
+
+        $result = $registrar->refreshRegistration($registration->fresh() ?? $registration);
+        $registration = $this->applyRegistrarResult($registration, $result, DomainRegistrationStatus::Registering);
+        if ($registration->status === DomainRegistrationStatus::Active && trim((string) $registration->dns_provider_key) !== '') {
+            $this->ensureDnsZone($registration);
+        }
+
+        return $registration->fresh() ?? $registration;
     }
 
     public function renew(DomainRegistration $registration, int $years = 1): DomainRegistration

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Agovena\Extensions\Proxmox;
 
+use ValueError;
+
 final class ProxmoxApiUrl
 {
     public static function normalize(string $url): string
@@ -44,7 +46,7 @@ final class ProxmoxApiUrl
 
         $scheme = strtolower((string) $parts['scheme']);
         $port = $parts['port'] ?? null;
-        if ($port !== null && (! is_int($port) || $port < 1 || $port > 65535)) {
+        if ($port === 0) {
             throw ProxmoxProviderException::failed('proxmox::messages.health.invalid_url');
         }
         if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {

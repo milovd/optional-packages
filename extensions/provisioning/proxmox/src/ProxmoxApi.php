@@ -27,6 +27,11 @@ interface ProxmoxApi
      */
     public function updateConfig(string $node, int $vmid, array $payload): void;
 
+    /**
+     * Grow a disk through PUT /nodes/{node}/qemu/{vmid}/resize. Proxmox VE never shrinks disks.
+     */
+    public function resizeDisk(string $node, int $vmid, string $disk, string $size): void;
+
     public function start(string $node, int $vmid): void;
 
     public function stop(string $node, int $vmid): void;
