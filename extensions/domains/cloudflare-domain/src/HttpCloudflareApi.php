@@ -33,6 +33,10 @@ final class HttpCloudflareApi implements CloudflareApi
     /** @return array<string, mixed> */
     private function post(string $path, array $payload): array
     {
+        if (app()->environment('demo')) {
+            throw new RuntimeException('Cloudflare Registrar requests are disabled in the demo environment.');
+        }
+
         $accountId = trim((string) $this->settings->get('cloudflare-domain', 'account_id', ''));
         $apiToken = trim((string) $this->settings->get('cloudflare-domain', 'api_token', ''));
         if ($accountId === '' || $apiToken === '') {

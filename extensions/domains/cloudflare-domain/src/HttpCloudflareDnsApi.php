@@ -81,6 +81,10 @@ final class HttpCloudflareDnsApi implements CloudflareDnsApi
     /** @param array<string, mixed> $query @param array<string, mixed> $payload @return array<string, mixed> */
     private function request(string $method, string $path, array $query = [], array $payload = []): array
     {
+        if (app()->environment('demo')) {
+            throw new RuntimeException('Cloudflare DNS requests are disabled in the demo environment.');
+        }
+
         $token = trim((string) $this->settings->get('cloudflare-domain', 'api_token', ''));
         if ($this->accountId() === '' || $token === '') {
             throw new RuntimeException('Cloudflare DNS is not configured.');

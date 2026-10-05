@@ -391,6 +391,10 @@ final class HttpPterodactylApi implements PterodactylApi
         ?array $body = null,
         string $accept = 'application/vnd.pterodactyl.v1+json',
     ): array {
+        if (app()->environment('demo')) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.errors.provider_failed');
+        }
+
         $baseUrl = $this->urlValidator->validate(PterodactylPanelUrl::normalize($this->panelUrl()));
         $url = rtrim($baseUrl, '/').$path;
         $timeout = max(1, (int) $this->setting('timeout', 15));

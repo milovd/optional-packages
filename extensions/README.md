@@ -70,7 +70,7 @@ Extensions must not bypass server-authoritative prices, webhook authority, or Ad
 
 ## Reference
 
-The first-party payment, provisioning, and shipping extensions are contract-tested adapters behind the generic Core seams. Their manifests currently set `production_ready: false`; hosted checkout, webhooks, refunds, lifecycle, labels, tracking, fake HTTP contracts, and error handling are not a substitute for provider sandbox acceptance.
+First-party Extensions are adapters behind generic Core seams. The five payment manifests set `production_ready: true` as a code/package readiness label; all nine provisioning, two domain and one shipping manifests set it to `false`. Neither label nor mocked contract tests prove provider sandbox acceptance, live transactions, or production operation. In an isolated `APP_ENV=demo`, only Pterodactyl and Cloudflare Domains may be enabled as experimental demo mappings; their outbound provider HTTP calls are blocked even when credentials exist.
 
 `extensions/provisioning/cpanel`, `convoy`, `directadmin`, `enhance`, `plesk`, `virtfusion`, and `virtualizor` are explicitly experimental and unavailable for production use until provider-specific acceptance evidence exists.
 
