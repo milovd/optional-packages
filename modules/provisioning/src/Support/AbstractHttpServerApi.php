@@ -9,6 +9,7 @@ use App\Agovena\Security\OutboundHttpUrlValidator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 abstract class AbstractHttpServerApi implements ServerApi
@@ -41,14 +42,14 @@ abstract class AbstractHttpServerApi implements ServerApi
     /** @return array<string, mixed> */
     public function connectionTest(): array
     {
-        return $this->request('GET', $this->healthPath());
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     /**
      * Provider adapters must implement their own capacity semantics. A shared
      * endpoint would risk treating an unrelated vendor response as capacity.
      *
-     * @param array<string, mixed> $requirements
+     * @param  array<string, mixed>  $requirements
      */
     public function availableCapacity(array $requirements): int
     {
@@ -60,76 +61,45 @@ abstract class AbstractHttpServerApi implements ServerApi
     /** @return array<string, mixed>|null */
     public function findServerByExternalId(string $externalId): ?array
     {
-        $payload = $this->request('GET', $this->collectionPath(), ['external_id' => $externalId]);
-        $items = $payload['data'] ?? $payload['servers'] ?? $payload;
-        if (! is_array($items)) {
-            throw new ServerProviderException('errors.malformed');
-        }
-
-        if (array_is_list($items)) {
-            foreach ($items as $item) {
-                if (is_array($item) && (string) ($item['external_id'] ?? '') === $externalId) {
-                    return $item;
-                }
-            }
-        }
-
-        return null;
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     /** @return array<string, mixed> */
     public function getServer(string $externalId): array
     {
-        return $this->request('GET', $this->itemPath($externalId));
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     /** @param array<string, mixed> $payload @return array<string, mixed> */
     public function createServer(array $payload): array
     {
-        return $this->request('POST', $this->collectionPath(), body: $payload);
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     public function suspend(string $externalId): void
     {
-        $this->request('POST', $this->actionPath($externalId, 'suspend'));
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     public function unsuspend(string $externalId): void
     {
-        $this->request('POST', $this->actionPath($externalId, 'unsuspend'));
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     public function terminate(string $externalId): void
     {
-        $this->request('DELETE', $this->itemPath($externalId));
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     /** @param array<string, mixed> $payload */
     public function changePlan(string $externalId, array $payload): void
     {
-        $this->request('PATCH', $this->itemPath($externalId), body: $payload);
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     public function action(string $externalId, string $action): void
     {
-        $this->request('POST', $this->actionPath($externalId, $action));
-    }
-
-    abstract protected function collectionPath(): string;
-
-    protected function healthPath(): string
-    {
-        return '/api/health';
-    }
-
-    protected function itemPath(string $externalId): string
-    {
-        return $this->collectionPath().'/'.rawurlencode($externalId);
-    }
-
-    protected function actionPath(string $externalId, string $action): string
-    {
-        return $this->itemPath($externalId).'/'.rawurlencode($action);
+        throw new ServerProviderException('errors.action_unavailable');
     }
 
     /** @return array<string, string> */
@@ -144,8 +114,8 @@ abstract class AbstractHttpServerApi implements ServerApi
     }
 
     /**
-     * @param array<string, scalar> $query
-     * @param array<string, mixed>|null $body
+     * @param  array<string, scalar>  $query
+     * @param  array<string, mixed>|null  $body
      * @return array<string, mixed>
      */
     protected function request(string $method, string $path, array $query = [], ?array $body = null): array
@@ -163,7 +133,7 @@ abstract class AbstractHttpServerApi implements ServerApi
         }
         try {
             $this->urlValidator->assertTlsVerification($verifyTls);
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             throw new ServerProviderException('errors.invalid_mapping');
         }
         $options = ['verify' => $verifyTls];
@@ -174,7 +144,8 @@ abstract class AbstractHttpServerApi implements ServerApi
         $pending = Http::timeout($timeout)
             ->withHeaders($this->headers())
             ->acceptJson()
-            ->withOptions($options);
+            ->withOptions($options)
+            ->withoutRedirecting();
 
         try {
             $response = match ($method) {
