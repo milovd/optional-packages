@@ -41,5 +41,7 @@ return [
         'tracking_failed' => 'PostNL-tracking kon niet worden vernieuwd.',
         'cancel_unsupported' => 'Deze PostNL-zending kan bij de vervoerder niet worden geannuleerd.',
         'timeout' => 'Het PostNL-verzoek is verlopen.',
+        'not_installed' => 'De PostNL-extensie is niet volledig geinstalleerd. Voer eerst de migraties uit.',
+        'in_progress' => 'Er wordt al een PostNL-zending voor deze bestelling aangemaakt. Probeer het zo opnieuw.',
     ],
 ];

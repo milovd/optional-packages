@@ -23,7 +23,10 @@ final class HttpPostnlApi implements PostnlApi
 
     public function createShipment(array $payload, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', '/v3/shipment', body: $payload, idempotencyKey: $idempotencyKey, query: ['confirm' => 'true']);
+        // PostNL documents no idempotency header; PostnlCarrier enforces one shipment per order locally.
+        unset($idempotencyKey);
+
+        return $this->request('POST', '/shipment/v2_2/label', body: $payload, query: ['confirm' => 'true']);
     }
 
     public function status(string $barcode): array
@@ -54,7 +57,7 @@ final class HttpPostnlApi implements PostnlApi
      * @param  array<string, mixed>|null  $body
      * @return array<string, mixed>
      */
-    private function request(string $method, string $path, array $query = [], ?array $body = null, ?string $idempotencyKey = null): array
+    private function request(string $method, string $path, array $query = [], ?array $body = null): array
     {
         $key = $this->apiKey();
         if ($key === null) {
@@ -63,12 +66,11 @@ final class HttpPostnlApi implements PostnlApi
 
         $pending = Http::timeout(15)
             ->connectTimeout(5)
-            ->withHeaders(array_filter([
+            ->withHeaders([
                 'apikey' => $key,
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
-                'Idempotency-Key' => $idempotencyKey,
-            ]))
+            ])
             ->withOptions(['allow_redirects' => false]);
 
         $url = $this->baseUrl().$path;

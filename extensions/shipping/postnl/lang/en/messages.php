@@ -41,5 +41,7 @@ return [
         'tracking_failed' => 'PostNL tracking could not be refreshed.',
         'cancel_unsupported' => 'This PostNL shipment cannot be cancelled at the provider.',
         'timeout' => 'The PostNL request timed out.',
+        'not_installed' => 'The PostNL Extension is not fully installed. Run its migrations before creating shipments.',
+        'in_progress' => 'A PostNL shipment for this order is already being created. Try again shortly.',
     ],
 ];

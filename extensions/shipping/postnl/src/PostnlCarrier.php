@@ -16,6 +16,7 @@ use App\Agovena\Shipping\Contracts\TracksShipments;
 use App\Agovena\Shipping\ShippingRateQuote;
 use App\Models\Order;
 use App\Models\Product;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +25,8 @@ use Illuminate\Validation\ValidationException;
 final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, QuotesShippingRates, ShippingCarrier, TracksShipments
 {
     public const ID = 'postnl';
+
+    private const CREATE_LOCK_SECONDS = 120;
 
     public function __construct(
         private readonly ExtensionSettingsRepository $settings,
@@ -103,7 +106,11 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
             if ($code === '') {
                 continue;
             }
-            $amount = $this->minorAmount($option['Price'] ?? $option['price'] ?? 0, $currency);
+            // The Checkout API returns delivery options, not tariffs; never infer a free rate.
+            $amount = $this->minorAmount($option['Price'] ?? $option['price'] ?? null, $currency);
+            if ($amount <= 0) {
+                continue;
+            }
             $quotes[] = new ShippingRateQuote(
                 carrierId: self::ID,
                 serviceCode: $code,
@@ -119,6 +126,28 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
     }
 
     public function createShipment(Order $order, string $serviceCode): CarrierShipmentResult
+    {
+        if (! Schema::hasTable('postnl_shipments')) {
+            throw ValidationException::withMessages([
+                'shipping' => __('postnl::messages.errors.not_installed'),
+            ]);
+        }
+
+        $lock = Cache::lock('postnl:create-shipment:'.$order->id, self::CREATE_LOCK_SECONDS);
+        if (! $lock->get()) {
+            throw ValidationException::withMessages([
+                'shipping' => __('postnl::messages.errors.in_progress'),
+            ]);
+        }
+
+        try {
+            return $this->createShipmentOnce($order, $serviceCode);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function createShipmentOnce(Order $order, string $serviceCode): CarrierShipmentResult
     {
         $existing = $this->existing($order->id);
         if ($existing !== null) {
@@ -193,8 +222,17 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
             ]);
         }
 
+        // The label call pre-announces the parcel, so persist the barcode before
+        // decoding the label. A retry then reuses it instead of announcing again.
+        $row = PostnlShipment::query()->create([
+            'order_id' => $order->id,
+            'barcode' => $barcode,
+            'product_code' => $code,
+            'label_path' => null,
+            'provider_status' => 'label_failed',
+        ]);
         $labelPath = $this->storeLabel($order->id, $barcode, $created);
-        $this->storeRow($order->id, $barcode, $code, $labelPath, 'created');
+        $row->forceFill(['label_path' => $labelPath, 'provider_status' => 'created'])->save();
 
         return new CarrierShipmentResult(
             externalId: $barcode,
@@ -222,11 +260,10 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
             ]);
         }
 
-        $phase = strtolower((string) ($remote['Status']['PhaseCode'] ?? $remote['status'] ?? 'processing'));
-        $status = match (true) {
-            str_contains($phase, 'deliver') || $phase === '7' => 'delivered',
-            str_contains($phase, 'transit') || in_array($phase, ['2', '3', '4', '5'], true) => 'shipped',
-            str_contains($phase, 'cancel') => 'cancelled',
+        $phase = $this->phaseCode($remote);
+        $status = match ($phase) {
+            '2', '3' => 'shipped',
+            '4' => 'delivered',
             default => 'processing',
         };
 
@@ -234,7 +271,7 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
         $postal = '';
         $country = 'NL';
         if ($row !== null) {
-            $row->provider_status = $phase;
+            $row->provider_status = $phase !== '' ? 'phase_'.$phase : 'unknown';
             $row->save();
             $mapped = Order::query()->find($row->order_id);
             if ($mapped !== null) {
@@ -261,28 +298,24 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
 
     private function existing(int $orderId): ?PostnlShipment
     {
-        if (! Schema::hasTable('postnl_shipments')) {
-            return null;
-        }
-
         return PostnlShipment::query()->where('order_id', $orderId)->first();
     }
 
-    private function storeRow(int $orderId, string $barcode, string $code, string $labelPath, string $status): void
+    /**
+     * Shipping Status API v2 nests the current status under CurrentStatus.Shipment,
+     * which is an object for one parcel and a list for multi-collo shipments.
+     *
+     * @param  array<string, mixed>  $remote
+     */
+    private function phaseCode(array $remote): string
     {
-        if (! Schema::hasTable('postnl_shipments')) {
-            return;
+        $shipment = $remote['CurrentStatus']['Shipment'] ?? null;
+        if (is_array($shipment) && array_is_list($shipment)) {
+            $shipment = $shipment[0] ?? null;
         }
+        $phase = is_array($shipment) && is_array($shipment['Status'] ?? null) ? ($shipment['Status']['PhaseCode'] ?? null) : null;
 
-        PostnlShipment::query()->updateOrCreate(
-            ['order_id' => $orderId],
-            [
-                'barcode' => $barcode,
-                'product_code' => $code,
-                'label_path' => $labelPath,
-                'provider_status' => $status,
-            ],
-        );
+        return is_scalar($phase) ? trim((string) $phase) : '';
     }
 
     private function resultFromRow(PostnlShipment $row): CarrierShipmentResult
