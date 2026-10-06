@@ -5,7 +5,7 @@ Optional Agovena extension for the `domains` module. It registers two providers:
 - `cloudflare-registrar` (`DomainRegistrar`): availability check and registration through the Cloudflare Registrar API.
 - `cloudflare-dns` (`DomainDnsProvider`): zone preparation and DNS record management through the Cloudflare DNS API.
 
-Status: `production_ready: false`. See "Readiness" below.
+Status: `production_ready: true`. See "Readiness" below.
 
 ## Settings
 
