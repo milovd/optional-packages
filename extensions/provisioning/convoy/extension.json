@@ -2,8 +2,8 @@
     "id": "convoy",
     "name": "Convoy",
     "version": "1.0.0",
-    "description": "Experimental Convoy provider adapter. Not available for production use.",
-    "production_ready": false,
+    "description": "Provisioning Extension for Convoy v4.6.1 virtual servers (create, suspend, unsuspend, terminate, resource limit change, status sync).",
+    "production_ready": true,
     "author": "Agovena",
     "category": "provisioning",
     "agovena": "^0.0.1",
@@ -30,15 +30,6 @@
             "required": true,
             "default": "",
             "help": "convoy::messages.settings.api_token_help"
-        },
-        {
-            "key": "organization_id",
-            "label": "convoy::messages.settings.organization_id",
-            "type": "string",
-            "secret": false,
-            "required": true,
-            "default": "",
-            "help": "convoy::messages.settings.organization_id_help"
         },
         {
             "key": "verify_tls",
