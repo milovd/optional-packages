@@ -151,6 +151,7 @@ abstract class AbstractHttpServerApi implements ServerApi
             $response = match ($method) {
                 'GET' => $pending->get($url, $query),
                 'POST' => $pending->post($url, $body ?? []),
+                'PUT' => $pending->put($url, $body ?? []),
                 'PATCH' => $pending->patch($url, $body ?? []),
                 'DELETE' => $pending->delete($url, $body ?? []),
                 default => throw new ServerProviderException('errors.provider_failed'),
