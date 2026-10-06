@@ -2,8 +2,8 @@
     "id": "directadmin",
     "name": "DirectAdmin",
     "version": "1.0.0",
-    "description": "Experimental DirectAdmin provider adapter. Not available for production use.",
-    "production_ready": false,
+    "description": "Provisioning Extension for DirectAdmin hosting accounts (create, suspend, unsuspend, terminate, package change, status sync).",
+    "production_ready": true,
     "author": "Agovena",
     "category": "provisioning",
     "agovena": "^0.0.1",
@@ -23,6 +23,15 @@
             "help": "directadmin::messages.settings.api_url_help"
         },
         {
+            "key": "api_username",
+            "label": "directadmin::messages.settings.api_username",
+            "type": "string",
+            "secret": false,
+            "required": true,
+            "default": "",
+            "help": "directadmin::messages.settings.api_username_help"
+        },
+        {
             "key": "api_token",
             "label": "directadmin::messages.settings.api_token",
             "type": "string",
@@ -32,13 +41,13 @@
             "help": "directadmin::messages.settings.api_token_help"
         },
         {
-            "key": "api_username",
-            "label": "directadmin::messages.settings.api_username",
+            "key": "ip",
+            "label": "directadmin::messages.settings.ip",
             "type": "string",
             "secret": false,
             "required": true,
             "default": "",
-            "help": "directadmin::messages.settings.api_username_help"
+            "help": "directadmin::messages.settings.ip_help"
         },
         {
             "key": "verify_tls",

@@ -12,6 +12,8 @@ final class NamecheapDomainServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(NamecheapApi::class, HttpNamecheapApi::class);
+        $this->app->singleton(NamecheapDnsApi::class, HttpNamecheapApi::class);
+        $this->app->singleton(NamecheapDnsProvider::class);
         $this->app->singleton(NamecheapRegistrar::class);
         $this->app->singleton(NamecheapDomainExtension::class);
     }

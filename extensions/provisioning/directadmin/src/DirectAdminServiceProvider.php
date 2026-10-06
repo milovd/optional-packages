@@ -16,7 +16,11 @@ final class DirectAdminServiceProvider extends ServiceProvider
         $this->app->singleton(DirectAdminProvisioner::class, function ($app): DirectAdminProvisioner {
             $api = $app->bound(DirectAdminApi::class) ? $app->make(DirectAdminApi::class) : $app->make(HttpDirectAdminApi::class);
 
-            return new DirectAdminProvisioner($app->make(ExtensionSettingsRepository::class), $api);
+            return new DirectAdminProvisioner(
+                $app->make(ExtensionSettingsRepository::class),
+                $api,
+                $app->make(DirectAdminUsernameGenerator::class),
+            );
         });
     }
 

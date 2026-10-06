@@ -5,7 +5,7 @@
     "description": "Namecheap domain availability, registration and renewal management in one provider integration.",
     "author": "Agovena",
     "category": "domain",
-    "production_ready": false,
+    "production_ready": true,
     "agovena": "^0.0.1",
     "provider": "Agovena\\Extensions\\NamecheapDomain\\NamecheapDomainServiceProvider",
     "module_dependencies": ["domains"],

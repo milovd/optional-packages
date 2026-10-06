@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Agovena\Extensions\NamecheapDomain;
 
+use Agovena\Modules\Domains\DomainDnsProviderRegistry;
 use Agovena\Modules\Domains\DomainRegistrarRegistry;
 use App\Agovena\Extensions\Contracts\Extension;
 use App\Agovena\Extensions\ExtensionContext;
@@ -57,5 +58,6 @@ final class NamecheapDomainExtension implements Extension
         ));
 
         app(DomainRegistrarRegistry::class)->register(app(NamecheapRegistrar::class));
+        app(DomainDnsProviderRegistry::class)->register(app(NamecheapDnsProvider::class));
     }
 }

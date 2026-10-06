@@ -9,7 +9,7 @@ return [
         'username' => 'Namecheap account username',
         'username_help' => 'The Namecheap username used for API requests.',
         'client_ip' => 'Allowlisted client IP',
-        'client_ip_help' => 'The public IP address allowlisted in Namecheap API settings.',
+        'client_ip_help' => 'The public IPv4 address of this server, allowlisted in the Namecheap API settings. Namecheap accepts IPv4 only.',
         'sandbox' => 'Use Namecheap sandbox',
         'sandbox_help' => 'Use the Namecheap sandbox endpoint until a real provider flow is approved.',
     ],
