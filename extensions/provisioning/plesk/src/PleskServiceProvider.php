@@ -23,6 +23,7 @@ final class PleskServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadTranslationsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'lang', 'plesk');
+        $this->loadMigrationsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'database'.DIRECTORY_SEPARATOR.'migrations');
     }
 
     public function extension(): Extension

@@ -68,7 +68,8 @@ final class ServerApiSafetyTest extends TestCase
         Http::fake(['*' => Http::response(['ok' => true], 200)]);
 
         foreach (self::unverifiedProviders() as $provider => [$apiClass]) {
-            if ($provider === 'cpanel') {
+            // These adapters run a documented health call; their own Core tests cover it.
+            if (in_array($provider, ['cpanel', 'directadmin', 'plesk'], true)) {
                 continue;
             }
             $api = new $apiClass(app(ExtensionSettingsRepository::class), ['api_url' => 'https://provider.example']);
