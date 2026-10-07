@@ -13,6 +13,10 @@ Each package declares its identity and contract in a `module.json` or `extension
 
 A package owns its own views, translations and migrations. Views live in `resources/views/` and are registered under the package namespace with `loadViewsFrom()` (for example `provisioning::admin.show` or `paypal::checkout`); storefront pages render the active Theme's views through `$theme->view(...)` so Themes control storefront presentation.
 
+## Versioning
+
+Bump a package's `version` whenever its shipped files change; installed packages only change when they are updated. The `agovena` field declares the Core versions the package runs on. While Core is `0.x`, Core patch releases keep packages working and minor releases may not, so declare a range such as `>=0.0.1 <0.1.0` rather than a caret constraint. Core can also require a minimum version of a first-party package; see the Core `CONTRIBUTING.md`.
+
 ## Using the packages
 
 Install and manage packages from Agovena Core through the Admin interface. The [Agovena documentation](https://agovena.com/docs) covers installation, package management and operations.

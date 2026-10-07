@@ -1,10 +1,10 @@
 {
     "id": "digital-delivery",
     "name": "Digital Delivery",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Secure digital value fulfillment: keys, codes, licenses, credentials, and account secrets.",
     "author": "Agovena",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "group": "commerce",
     "provider": "Agovena\\Modules\\DigitalDelivery\\DigitalDeliveryServiceProvider",
     "dependencies": []

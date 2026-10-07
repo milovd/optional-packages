@@ -1,10 +1,10 @@
 {
     "id": "domains",
     "name": "Domain",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "One domain surface for registration, renewals and DNS management.",
     "author": "Agovena",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "group": "commerce",
     "provider": "Agovena\\Modules\\Domains\\DomainsServiceProvider",
     "dependencies": []

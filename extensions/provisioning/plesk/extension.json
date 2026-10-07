@@ -1,12 +1,12 @@
 {
     "id": "plesk",
     "name": "Plesk",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Provisioning Extension for Plesk customers and hosting subscriptions.",
     "production_ready": true,
     "author": "Agovena",
     "category": "provisioning",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "provider": "Agovena\\Extensions\\Plesk\\PleskServiceProvider",
     "dependencies": [],
     "module_dependencies": [

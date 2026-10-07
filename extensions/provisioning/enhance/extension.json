@@ -1,12 +1,12 @@
 {
     "id": "enhance",
     "name": "Enhance",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Provisioning Extension for Enhance hosting subscriptions (create, suspend, unsuspend, terminate, plan change, status sync).",
     "production_ready": true,
     "author": "Agovena",
     "category": "provisioning",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "provider": "Agovena\\Extensions\\Enhance\\EnhanceServiceProvider",
     "dependencies": [],
     "module_dependencies": [
