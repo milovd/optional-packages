@@ -10,7 +10,7 @@ It is not a Module; the Provisioning Module stays generic.
 `production_ready: true`. Create, suspend, unsuspend, terminate, plan change,
 package check, status sync, panel and health are implemented against the
 VirtFusion API v1 documentation and covered by
-`agovena-platform/tests/Feature/VirtfusionProvisioningLifecycleTest.php`
+`agovena-platform/tests/Feature/Provisioning/VirtfusionProvisioningLifecycleTest.php`
 (`Http::fake`, no network). Live acceptance against a merchant panel is a
 separate operator check.
 

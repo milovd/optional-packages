@@ -106,7 +106,7 @@ These operations are not advertised. Through the provider contracts, unsupported
 
 ## Readiness
 
-Every advertised operation (`availability_check`, `registration`, `renewal`, `zone_management`, `records`) and the status refresh are implemented against the documented commands above and covered by Core regression tests: `tests/Unit/NamecheapApiTest.php`, `tests/Feature/NamecheapDomainReadinessTest.php` and `tests/Feature/UnifiedDomainExtensionTest.php`, with `Http::fake` and in-memory fakes only.
+Every advertised operation (`availability_check`, `registration`, `renewal`, `zone_management`, `records`) and the status refresh are implemented against the documented commands above and covered by Core regression tests: `tests/Unit/NamecheapApiTest.php`, `tests/Feature/Domains/NamecheapDomainReadinessTest.php` and `tests/Feature/Domains/UnifiedDomainExtensionTest.php`, with `Http::fake` and in-memory fakes only.
 
 `production_ready` is `true` for the operations above. Everything listed under "Explicitly unsupported" stays unsupported.
 
