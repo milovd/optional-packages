@@ -112,6 +112,8 @@ final class AssetsIndex extends Component
 
     public function render(AdminRegistrar $admin)
     {
+        $this->authorize('digital.view');
+
         return view('digital::admin.assets-index', [
             'assets' => DigitalAsset::query()->with('product')->orderByDesc('id')->get(),
             'products' => Product::query()

@@ -51,6 +51,8 @@ final class CheckIn extends Component
 
     public function render(AdminRegistrar $admin)
     {
+        $this->authorize('events.checkin');
+
         $ticket = $this->lastTicketId !== null
             ? EventTicket::query()->with(['event', 'performance', 'ticketType'])->find($this->lastTicketId)
             : null;

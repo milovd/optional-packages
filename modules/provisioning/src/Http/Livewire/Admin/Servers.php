@@ -161,6 +161,8 @@ final class Servers extends Component
 
     public function render(AdminRegistrar $admin)
     {
+        $this->authorize('provisioning.manage');
+
         return view('provisioning::admin.servers', [
             'servers' => ProvisioningServer::query()->orderBy('name')->get(),
             'providers' => $this->providers(),

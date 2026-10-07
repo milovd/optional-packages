@@ -135,6 +135,8 @@ final class InstanceShow extends Component
 
     public function render(AdminRegistrar $admin, ProvisionerRegistry $provisioners)
     {
+        $this->authorize('provisioning.view');
+
         $provisioner = $this->instance->provider_key !== null
             ? $provisioners->get($this->instance->provider_key)
             : null;

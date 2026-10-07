@@ -123,6 +123,8 @@ final class ProductEventTab extends Component
 
     public function render()
     {
+        $this->authorize('events.view');
+
         return view('events::admin.product-tab');
     }
 }

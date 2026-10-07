@@ -23,6 +23,8 @@ final class CustomerServices extends Component
 
     public function render()
     {
+        $this->authorize('provisioning.view');
+
         $instances = ServiceInstance::query()
             ->with('product')
             ->where('customer_id', $this->customer->id)

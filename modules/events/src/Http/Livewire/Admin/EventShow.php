@@ -115,6 +115,8 @@ final class EventShow extends Component
 
     public function render(AdminRegistrar $admin, EventService $events)
     {
+        $this->authorize('events.view');
+
         $this->event->load(['performances', 'ticketTypes.product']);
         $remaining = [];
         foreach ($this->event->performances as $performance) {

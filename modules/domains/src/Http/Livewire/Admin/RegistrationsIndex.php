@@ -65,6 +65,8 @@ final class RegistrationsIndex extends Component
         DomainRegistrarRegistry $registrars,
         DomainDnsProviderRegistry $dnsProviders,
     ) {
+        $this->authorize('domains.view');
+
         $query = DomainRegistration::query()
             ->with(['product', 'customer'])
             ->orderByDesc('id');
