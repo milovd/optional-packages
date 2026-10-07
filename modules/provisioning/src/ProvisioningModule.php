@@ -20,7 +20,7 @@ use Agovena\Modules\Provisioning\Listeners\SnapshotProvisioningConfigurationWhen
 use Agovena\Modules\Provisioning\Listeners\SnapshotProvisioningConfigurationWhenOrderPlacing;
 use Agovena\Modules\Provisioning\Listeners\SuspendServicesWhenSubscriptionEnded;
 use Agovena\Modules\Provisioning\Models\ServiceInstance;
-use App\Agovena\Recurring\Events\SubscriptionEnded;
+use Agovena\Modules\Provisioning\Support\ProvisioningProductReadiness;
 use App\Agovena\Admin\CustomerDetailSection;
 use App\Agovena\Admin\NavigationItem;
 use App\Agovena\Catalog\Capabilities\ProductCapabilityDefinition;
@@ -28,7 +28,7 @@ use App\Agovena\Customer\AccountNavItem;
 use App\Agovena\Customer\AccountOverviewCard;
 use App\Agovena\Modules\Contracts\Module;
 use App\Agovena\Modules\ModuleContext;
-use App\Agovena\Provisioning\ProvisionerRegistry;
+use App\Agovena\Recurring\Events\SubscriptionEnded;
 use App\Events\OrderCancelled;
 use App\Events\OrderCreated;
 use App\Events\OrderPaid;
@@ -52,13 +52,7 @@ final class ProvisioningModule implements Module
             label: 'admin.products.capabilities.provisionable',
             description: 'admin.products.capabilities.provisionable_help',
             providedByModule: $this->id(),
-            availability: static function (array $config): bool {
-                $providerKey = $config['provider_key'] ?? null;
-
-                return ! is_string($providerKey)
-                    || $providerKey === ''
-                    || app(ProvisionerRegistry::class)->get($providerKey) !== null;
-            },
+            availability: static fn (array $config): bool => app(ProvisioningProductReadiness::class)->isOrderable($config),
         ));
 
         $context->admin()->permission('provisioning.view', 'admin.permissions.provisioning.view');
