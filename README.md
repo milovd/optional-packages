@@ -11,6 +11,8 @@ This repository contains first-party packages that add optional commerce capabil
 
 Each package declares its identity and contract in a `module.json` or `extension.json` manifest.
 
+A package owns its own views, translations and migrations. Views live in `resources/views/` and are registered under the package namespace with `loadViewsFrom()` (for example `provisioning::admin.show` or `paypal::checkout`); storefront pages render the active Theme's views through `$theme->view(...)` so Themes control storefront presentation.
+
 ## Using the packages
 
 Install and manage packages from Agovena Core through the Admin interface. The [Agovena documentation](https://agovena.com/docs) covers installation, package management and operations.
