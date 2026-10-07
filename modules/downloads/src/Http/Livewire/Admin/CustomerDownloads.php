@@ -22,7 +22,7 @@ final class CustomerDownloads extends Component
             ->limit(8)
             ->get();
 
-        return view('livewire.admin.digital.customer-section', [
+        return view('digital::admin.customer-section', [
             'entitlements' => $entitlements,
         ]);
     }

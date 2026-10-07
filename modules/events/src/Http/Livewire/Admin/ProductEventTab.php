@@ -123,6 +123,6 @@ final class ProductEventTab extends Component
 
     public function render()
     {
-        return view('livewire.admin.events.product-tab');
+        return view('events::admin.product-tab');
     }
 }

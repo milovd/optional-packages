@@ -30,7 +30,7 @@ final class CustomerServices extends Component
             ->limit(20)
             ->get();
 
-        return view('livewire.admin.provisioning.customer-section', [
+        return view('provisioning::admin.customer-section', [
             'instances' => $instances,
         ]);
     }

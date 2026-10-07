@@ -139,7 +139,7 @@ final class SecretsIndex extends Component
             ];
         }
 
-        return view('livewire.admin.digital-delivery.secrets-index', [
+        return view('digital-delivery::admin.secrets-index', [
             'products' => $products,
             'counts' => $counts,
             'deliveries' => DigitalSecretDelivery::query()

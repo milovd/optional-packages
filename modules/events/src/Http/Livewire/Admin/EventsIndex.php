@@ -46,7 +46,7 @@ final class EventsIndex extends Component
 
     public function render(AdminRegistrar $admin)
     {
-        return view('livewire.admin.events.index', [
+        return view('events::admin.index', [
             'events' => Event::query()->withCount('performances')->latest('id')->paginate(20),
         ])->layout('layouts.admin', [
             'title' => __('events::admin.title'),

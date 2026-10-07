@@ -27,7 +27,7 @@ final class InstancesIndex extends Component
             $query->where('status', $this->status);
         }
 
-        return view('livewire.admin.provisioning.index', [
+        return view('provisioning::admin.index', [
             'instances' => $query->limit(100)->get(),
         ])->layout('layouts.admin', [
             'title' => __('provisioning::admin.title'),

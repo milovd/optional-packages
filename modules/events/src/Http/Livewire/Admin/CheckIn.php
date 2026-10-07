@@ -55,7 +55,7 @@ final class CheckIn extends Component
             ? EventTicket::query()->with(['event', 'performance', 'ticketType'])->find($this->lastTicketId)
             : null;
 
-        return view('livewire.admin.events.check-in', [
+        return view('events::admin.check-in', [
             'ticket' => $ticket,
         ])->layout('layouts.admin', [
             'title' => __('events::admin.checkin_title'),

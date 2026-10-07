@@ -121,7 +121,7 @@ final class EventShow extends Component
             $remaining[$performance->id] = $events->remainingForPerformance($performance);
         }
 
-        return view('livewire.admin.events.show', [
+        return view('events::admin.show', [
             'remaining' => $remaining,
             'products' => Product::query()->active()->orderBy('name')->limit(100)->get(),
         ])->layout('layouts.admin', [

@@ -26,6 +26,7 @@ final class DomainsServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'domains');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'domains');
         $registrars = app(DomainRegistrarRegistry::class);
         $dnsProviders = app(DomainDnsProviderRegistry::class);
         if (! $this->app->environment('production')) {

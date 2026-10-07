@@ -21,7 +21,7 @@ final class CustomerEventTickets extends Component
             ->limit(8)
             ->get();
 
-        return view('livewire.admin.events.customer-section', [
+        return view('events::admin.customer-section', [
             'tickets' => $tickets,
         ]);
     }

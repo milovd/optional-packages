@@ -142,7 +142,7 @@ final class InstanceShow extends Component
         $settings = $this->instance->meta['provider_settings'] ?? [];
         $settings = is_array($settings) ? $settings : [];
 
-        return view('livewire.admin.provisioning.show', [
+        return view('provisioning::admin.show', [
             'instance' => $this->instance,
             'usesLifecycle' => $this->usesLifecycle(),
             'providerLabel' => $provisioner?->label() ?? $this->instance->provider_key,
