@@ -671,6 +671,12 @@ final class ProxmoxProvisioner implements ChecksProvisioningStock, ChecksProvisi
             return HealthResult::fail(__('proxmox::messages.health.missing_token'));
         }
 
+        foreach (['token_user', 'token_id', 'node', 'storage'] as $key) {
+            if (trim((string) $this->settings->get('proxmox', $key, '')) === '') {
+                return HealthResult::fail(__('proxmox::messages.errors.not_configured'));
+            }
+        }
+
         try {
             $this->api->connectionTest();
         } catch (ProxmoxProviderException $exception) {

@@ -24,6 +24,10 @@ use Illuminate\Validation\ValidationException;
 
 final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, QuotesShippingRates, ShippingCarrier, TracksShipments
 {
+    private const QUOTES_PAUSED_CACHE_KEY = 'postnl.checkout_quotes_paused';
+
+    private const QUOTES_PAUSE_SECONDS = 120;
+
     public const ID = 'postnl';
 
     private const CREATE_LOCK_SECONDS = 120;
@@ -68,6 +72,14 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
         return HealthResult::ok(__('postnl::messages.health.ok', ['mode' => $mode]));
     }
 
+    private function pausesQuotes(PostnlProviderException $exception): bool
+    {
+        return in_array($exception->errorKey, [
+            'postnl::messages.errors.timeout',
+            'postnl::messages.health.unreachable',
+        ], true) || ($exception->errorKey === 'postnl::messages.errors.not_configured' && $exception->status > 0);
+    }
+
     public function quote(Order $order): array
     {
         return $this->quoteCart([], $this->destinationFromOrder($order), $order->currency);
@@ -75,7 +87,7 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
 
     public function quoteCart(array $lines, ShippingDestination $destination, string $currency): array
     {
-        if (! $destination->isComplete()) {
+        if (! $destination->isComplete() || Cache::has(self::QUOTES_PAUSED_CACHE_KEY)) {
             return [];
         }
 
@@ -96,7 +108,12 @@ final class PostnlCarrier implements CreatesCarrierShipments, QuotesCartRates, Q
                     'Zipcode' => preg_replace('/\s+/', '', $destination->postalCode),
                 ],
             ]);
-        } catch (PostnlProviderException) {
+        } catch (PostnlProviderException $exception) {
+            if ($this->pausesQuotes($exception)) {
+                // Avoid a slow provider call on every checkout render while PostNL rejects or times out.
+                Cache::put(self::QUOTES_PAUSED_CACHE_KEY, true, self::QUOTES_PAUSE_SECONDS);
+            }
+
             return [];
         }
 

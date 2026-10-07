@@ -28,8 +28,11 @@ final class DomainsServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'domains');
         $registrars = app(DomainRegistrarRegistry::class);
         $dnsProviders = app(DomainDnsProviderRegistry::class);
-        $registrars->register(new DemoDomainRegistrar);
-        $dnsProviders->register(new DemoDnsProvider);
+        if (! $this->app->environment('production')) {
+            // Demo adapters simulate registration; a production store must use a real registrar.
+            $registrars->register(new DemoDomainRegistrar);
+            $dnsProviders->register(new DemoDnsProvider);
+        }
         app(RuntimeRegistry::class)->register($registrars);
         app(RuntimeRegistry::class)->register($dnsProviders);
         $this->commands([RefreshDomainRegistrationsCommand::class]);

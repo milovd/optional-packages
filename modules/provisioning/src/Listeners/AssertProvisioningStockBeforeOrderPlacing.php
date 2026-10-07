@@ -56,7 +56,7 @@ final class AssertProvisioningStockBeforeOrderPlacing
             }
 
             $provider = $this->provisioners->get($providerKey);
-            if (! $provider instanceof ChecksProvisioningStock) {
+            if ($provider === null) {
                 throw ValidationException::withMessages([
                     'cart' => __('provisioning::errors.provider_unavailable'),
                 ]);
@@ -70,6 +70,24 @@ final class AssertProvisioningStockBeforeOrderPlacing
                 serverId: $serverId,
                 serverSettingsRequired: $serverId !== null,
             );
+            if (! $provider instanceof ChecksProvisioningStock) {
+                // Account-based panels have no capacity pool to reserve; provisioning
+                // still fails closed after payment and is retried or sent to review.
+                $event->checks[$index] = [
+                    'provisionable' => true,
+                    'product_id' => $line->productId,
+                    'provider_key' => $providerKey,
+                    'provider_settings' => $providerSettings,
+                    'server_settings' => $serverSettings,
+                    'server_id' => $serverId,
+                    'capacity_key' => null,
+                    'requirements' => [],
+                    'vector_capable' => false,
+                    'quantity' => $context->quantity(),
+                ];
+
+                continue;
+            }
             $capacityKey = $provider->capacityKey($context);
             if ($capacityKey === '') {
                 throw ValidationException::withMessages([
@@ -204,6 +222,9 @@ final class AssertProvisioningStockBeforeOrderPlacing
         foreach ($event->lines as $index => $line) {
             $check = $event->preflight->checks[$index] ?? null;
             if (! is_array($check) || ($check['provisionable'] ?? false) !== true) {
+                continue;
+            }
+            if (! is_string($check['capacity_key'] ?? null) || $check['capacity_key'] === '') {
                 continue;
             }
             $product = Product::query()->find($line->productId);

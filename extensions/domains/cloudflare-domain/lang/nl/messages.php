@@ -7,4 +7,8 @@ return [
         'api_token' => 'Cloudflare API-token',
         'api_token_help' => 'Versleuteld opgeslagen en na opslaan niet opnieuw getoond. Beperk het token tot de benodigde Registrar- en DNS-rechten.',
     ],
+    'health' => [
+        'ok' => 'Cloudflare Registrar accepteerde de inloggegevens en beantwoordde een beschikbaarheidscontrole.',
+        'unavailable' => 'Cloudflare Registrar is niet geconfigureerd of weigerde het verzoek. Controleer het account-ID en de API-token.',
+    ],
 ];

@@ -38,6 +38,8 @@ final class DomainsModule implements Module
             label: 'domains::admin.capabilities.domain_registration',
             description: 'domains::admin.capabilities.domain_registration_help',
             providedByModule: $this->id(),
+            availability: static fn (array $config): bool => app(DomainRegistrarRegistry::class)
+                ->get(trim((string) ($config['registrar_key'] ?? '')) ?: 'demo-registrar') !== null,
         ));
         $context->productPricing()->register(app(DomainProductPriceResolver::class));
 

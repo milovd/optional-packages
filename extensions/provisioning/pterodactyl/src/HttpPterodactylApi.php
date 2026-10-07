@@ -414,7 +414,11 @@ final class HttpPterodactylApi implements PterodactylApi
             throw PterodactylProviderException::failed('pterodactyl::messages.errors.provider_failed');
         }
 
-        $baseUrl = $this->urlValidator->validate(PterodactylPanelUrl::normalize($this->panelUrl()));
+        try {
+            $baseUrl = $this->urlValidator->validate(PterodactylPanelUrl::normalize($this->panelUrl()));
+        } catch (ValidationException) {
+            throw PterodactylProviderException::failed('pterodactyl::messages.errors.invalid_mapping');
+        }
         $url = rtrim($baseUrl, '/').$path;
         $timeout = max(1, (int) $this->setting('timeout', 15));
         $verify = filter_var($this->setting('verify_tls', true), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);

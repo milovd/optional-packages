@@ -9,6 +9,8 @@ use Agovena\Modules\Domains\DomainRegistrarRegistry;
 use App\Agovena\Extensions\Contracts\Extension;
 use App\Agovena\Extensions\ExtensionContext;
 use App\Agovena\Extensions\ExtensionSettingDefinition;
+use App\Agovena\Payments\HealthResult;
+use Throwable;
 
 final class CloudflareDomainExtension implements Extension
 {
@@ -34,6 +36,16 @@ final class CloudflareDomainExtension implements Extension
             required: false,
             help: 'cloudflare-domain::messages.settings.api_token_help',
         ));
+
+        $context->health(static function (): HealthResult {
+            try {
+                app(CloudflareApi::class)->check(['example.com']);
+            } catch (Throwable) {
+                return HealthResult::fail(__('cloudflare-domain::messages.health.unavailable'));
+            }
+
+            return HealthResult::ok(__('cloudflare-domain::messages.health.ok'));
+        });
 
         app(DomainRegistrarRegistry::class)->register(app(CloudflareRegistrar::class));
         app(DomainDnsProviderRegistry::class)->register(app(CloudflareDnsProvider::class));

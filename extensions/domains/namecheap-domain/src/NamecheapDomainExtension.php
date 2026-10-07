@@ -9,6 +9,8 @@ use Agovena\Modules\Domains\DomainRegistrarRegistry;
 use App\Agovena\Extensions\Contracts\Extension;
 use App\Agovena\Extensions\ExtensionContext;
 use App\Agovena\Extensions\ExtensionSettingDefinition;
+use App\Agovena\Payments\HealthResult;
+use Throwable;
 
 final class NamecheapDomainExtension implements Extension
 {
@@ -56,6 +58,16 @@ final class NamecheapDomainExtension implements Extension
             default: true,
             help: 'namecheap-domain::messages.settings.sandbox_help',
         ));
+
+        $context->health(static function (): HealthResult {
+            try {
+                app(NamecheapApi::class)->check(['example.com']);
+            } catch (Throwable) {
+                return HealthResult::fail(__('namecheap-domain::messages.health.unavailable'));
+            }
+
+            return HealthResult::ok(__('namecheap-domain::messages.health.ok'));
+        });
 
         app(DomainRegistrarRegistry::class)->register(app(NamecheapRegistrar::class));
         app(DomainDnsProviderRegistry::class)->register(app(NamecheapDnsProvider::class));

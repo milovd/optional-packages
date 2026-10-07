@@ -316,7 +316,11 @@ final class HttpProxmoxApi implements ProxmoxApi
      */
     private function request(string $method, string $path, array $query = [], ?array $body = null): array
     {
-        $baseUrl = $this->urlValidator->validate(ProxmoxApiUrl::normalize($this->apiUrl()));
+        try {
+            $baseUrl = $this->urlValidator->validate(ProxmoxApiUrl::normalize($this->apiUrl()));
+        } catch (ValidationException) {
+            throw ProxmoxProviderException::failed('proxmox::messages.errors.invalid_mapping');
+        }
         $url = rtrim($baseUrl, '/').'/api2/json'.$path;
         $timeout = max(1, (int) $this->setting('timeout', 30));
         $verify = filter_var($this->setting('verify_tls', true), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);

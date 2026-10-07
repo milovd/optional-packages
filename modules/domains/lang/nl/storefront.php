@@ -14,6 +14,7 @@ return [
     'requested' => 'Je zoekopdracht',
     'available' => 'Beschikbaar',
     'unavailable' => 'Niet beschikbaar',
+    'provider_unavailable' => 'Domeinregistratie is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
     'alternatives' => 'Beschikbare alternatieven',
     'select' => 'Domein selecteren',
     'continue' => 'Doorgaan',

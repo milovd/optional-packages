@@ -169,13 +169,19 @@ final class DomainSearchService
     private function resultFor(string $domain, Product $product, array $config): array
     {
         $registrar = $this->registrars->get($config['registrar_key']);
-        $result = $registrar?->checkAvailability($domain) ?? [
+        $unavailable = [
             'available' => false,
             'domain' => $domain,
             'price_minor' => null,
             'currency' => $product->currency,
             'reason' => 'provider_unavailable',
         ];
+        try {
+            $result = $registrar?->checkAvailability($domain) ?? $unavailable;
+        } catch (\Throwable $exception) {
+            report($exception);
+            $result = $unavailable;
+        }
         $providerPrice = $result['price_minor'] ?? null;
         if (is_string($providerPrice) && ctype_digit($providerPrice)) {
             $providerPrice = (int) $providerPrice;

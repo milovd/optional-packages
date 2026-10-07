@@ -14,6 +14,7 @@ return [
     'requested' => 'Your search',
     'available' => 'Available',
     'unavailable' => 'Unavailable',
+    'provider_unavailable' => 'Domain registration is temporarily unavailable. Try again later.',
     'alternatives' => 'Available alternatives',
     'select' => 'Select domain',
     'continue' => 'Continue',

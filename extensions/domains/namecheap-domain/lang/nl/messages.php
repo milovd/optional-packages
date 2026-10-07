@@ -13,4 +13,8 @@ return [
         'sandbox' => 'Namecheap-sandbox gebruiken',
         'sandbox_help' => 'Gebruik de Namecheap-sandbox totdat een echte providerflow is goedgekeurd.',
     ],
+    'health' => [
+        'ok' => 'Namecheap accepteerde de inloggegevens en beantwoordde een beschikbaarheidscontrole.',
+        'unavailable' => 'Namecheap is niet geconfigureerd of weigerde het verzoek. Controleer de inloggegevens en het toegestane IP-adres.',
+    ],
 ];

@@ -13,4 +13,8 @@ return [
         'sandbox' => 'Use Namecheap sandbox',
         'sandbox_help' => 'Use the Namecheap sandbox endpoint until a real provider flow is approved.',
     ],
+    'health' => [
+        'ok' => 'Namecheap accepted the credentials and answered an availability check.',
+        'unavailable' => 'Namecheap is not configured or rejected the request. Check the credentials and allowlisted IP.',
+    ],
 ];
