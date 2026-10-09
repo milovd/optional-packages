@@ -30,8 +30,9 @@ final class PaddleServiceProvider extends ServiceProvider
     {
         $this->loadTranslationsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'lang', 'paddle');
         $this->loadViewsFrom(dirname(__DIR__).DIRECTORY_SEPARATOR.'resources'.DIRECTORY_SEPARATOR.'views', 'paddle');
+        // Same suspension and blocked-IP guard as the Core checkout.
         Route::get('/paddle/checkout', PaddleCheckoutPage::class)
-            ->middleware('web')
+            ->middleware(['web', 'abuse'])
             ->name('paddle.checkout');
     }
 

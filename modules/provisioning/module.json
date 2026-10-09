@@ -1,10 +1,11 @@
 {
     "id": "provisioning",
     "name": "Provisioning",
-    "version": "1.0.0",
+    "version": "1.1.1",
+    "logo": "resources/images/logo.png",
     "description": "Generic service instances for provisionable products. Provider adapters belong in Extensions.",
     "author": "Agovena",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "group": "recurring",
   "provider": "Agovena\\Modules\\Provisioning\\ProvisioningServiceProvider",
     "dependencies": []

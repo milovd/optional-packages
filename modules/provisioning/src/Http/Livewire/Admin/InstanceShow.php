@@ -135,6 +135,8 @@ final class InstanceShow extends Component
 
     public function render(AdminRegistrar $admin, ProvisionerRegistry $provisioners)
     {
+        $this->authorize('provisioning.view');
+
         $provisioner = $this->instance->provider_key !== null
             ? $provisioners->get($this->instance->provider_key)
             : null;
@@ -142,7 +144,7 @@ final class InstanceShow extends Component
         $settings = $this->instance->meta['provider_settings'] ?? [];
         $settings = is_array($settings) ? $settings : [];
 
-        return view('livewire.admin.provisioning.show', [
+        return view('provisioning::admin.show', [
             'instance' => $this->instance,
             'usesLifecycle' => $this->usesLifecycle(),
             'providerLabel' => $provisioner?->label() ?? $this->instance->provider_key,

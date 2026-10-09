@@ -22,12 +22,14 @@ final class InstancesIndex extends Component
 
     public function render(AdminRegistrar $admin)
     {
+        $this->authorize('provisioning.view');
+
         $query = ServiceInstance::query()->with('product')->orderByDesc('id');
         if ($this->status !== '') {
             $query->where('status', $this->status);
         }
 
-        return view('livewire.admin.provisioning.index', [
+        return view('provisioning::admin.index', [
             'instances' => $query->limit(100)->get(),
         ])->layout('layouts.admin', [
             'title' => __('provisioning::admin.title'),

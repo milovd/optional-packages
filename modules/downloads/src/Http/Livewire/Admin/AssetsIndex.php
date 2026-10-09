@@ -112,7 +112,9 @@ final class AssetsIndex extends Component
 
     public function render(AdminRegistrar $admin)
     {
-        return view('livewire.admin.digital.assets-index', [
+        $this->authorize('digital.view');
+
+        return view('digital::admin.assets-index', [
             'assets' => DigitalAsset::query()->with('product')->orderByDesc('id')->get(),
             'products' => Product::query()
                 ->whereHas('capabilities', static fn ($q) => $q->where('capability', 'digital'))

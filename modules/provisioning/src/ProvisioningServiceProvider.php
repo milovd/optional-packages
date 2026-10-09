@@ -29,6 +29,7 @@ final class ProvisioningServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'provisioning');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'provisioning');
         $this->commands([RecoverPlanChangeCompensationsCommand::class]);
         $this->app->booted(function (): void {
             $this->app->make(Schedule::class)

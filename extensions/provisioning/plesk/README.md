@@ -10,7 +10,7 @@ generic.
 
 `production_ready: true`. Every advertised operation below is implemented
 against the Plesk Obsidian XML API documentation and covered by
-`agovena-platform/tests/Feature/PleskProvisioningLifecycleTest.php`
+`agovena-platform/tests/Feature/Provisioning/PleskProvisioningLifecycleTest.php`
 (`Http::fake`, no network).
 
 ## Merchant setup

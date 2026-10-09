@@ -1,12 +1,12 @@
 {
     "id": "stripe",
     "name": "Stripe",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Payment Extension for Stripe Checkout, provider-discovered payment methods, signed webhooks, refunds, and off-session charges.",
     "author": "Agovena",
     "category": "payment_gateway",
     "production_ready": true,
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "provider": "Agovena\\Extensions\\Stripe\\StripeServiceProvider",
     "dependencies": [],
     "settings": [

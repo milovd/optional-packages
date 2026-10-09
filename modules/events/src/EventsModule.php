@@ -57,13 +57,26 @@ final class EventsModule implements Module
         ));
 
         $context->admin()->navigation(new NavigationItem(
+            id: 'events',
+            label: 'admin.nav.events',
+            group: 'admin.nav_groups.fulfillment',
+            href: '/admin/events',
+            icon: 'calendar',
+            sort: 28,
+            permission: 'events.view',
+            activeForPaths: ['/admin/events/check-in'],
+        ));
+
+        $context->admin()->navigation(new NavigationItem(
             id: 'events-checkin',
             label: 'admin.nav.events_checkin',
-            group: 'admin.nav_groups.operations',
+            group: 'admin.nav_groups.fulfillment',
             href: '/admin/events/check-in',
             icon: 'ticket',
             sort: 29,
             permission: 'events.checkin',
+            moduleId: $this->id(),
+            hideWhenPermission: 'events.view',
         ));
 
         $context->customerAccountNav(new AccountNavItem(

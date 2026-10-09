@@ -1,10 +1,11 @@
 {
     "id": "events",
     "name": "Events",
-    "version": "1.0.0",
+    "version": "1.1.1",
+    "logo": "resources/images/logo.png",
     "description": "Timed admission for theatre, concerts, workshops, and conferences. Ticket products issue unique tickets after payment.",
     "author": "Agovena",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "group": "experiences",
     "provider": "Agovena\\Modules\\Events\\EventsServiceProvider",
     "dependencies": []

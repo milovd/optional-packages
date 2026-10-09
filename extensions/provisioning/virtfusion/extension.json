@@ -1,12 +1,12 @@
 {
     "id": "virtfusion",
     "name": "VirtFusion",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Provisioning Extension for VirtFusion virtual servers (create, suspend, unsuspend, terminate, package change, status sync).",
     "production_ready": true,
     "author": "Agovena",
     "category": "provisioning",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "provider": "Agovena\\Extensions\\Virtfusion\\VirtfusionServiceProvider",
     "dependencies": [],
     "module_dependencies": [

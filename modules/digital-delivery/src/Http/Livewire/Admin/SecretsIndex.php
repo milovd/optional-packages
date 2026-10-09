@@ -126,6 +126,8 @@ final class SecretsIndex extends Component
 
     public function render(AdminRegistrar $admin, DigitalSecretFulfillmentService $secrets)
     {
+        $this->authorize('digital_delivery.view');
+
         $products = Product::query()
             ->whereHas('capabilities', static fn ($q) => $q->where('capability', DigitalSecretFulfillmentService::CAPABILITY))
             ->orderBy('name')
@@ -139,7 +141,7 @@ final class SecretsIndex extends Component
             ];
         }
 
-        return view('livewire.admin.digital-delivery.secrets-index', [
+        return view('digital-delivery::admin.secrets-index', [
             'products' => $products,
             'counts' => $counts,
             'deliveries' => DigitalSecretDelivery::query()

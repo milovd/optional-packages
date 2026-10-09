@@ -115,13 +115,15 @@ final class EventShow extends Component
 
     public function render(AdminRegistrar $admin, EventService $events)
     {
+        $this->authorize('events.view');
+
         $this->event->load(['performances', 'ticketTypes.product']);
         $remaining = [];
         foreach ($this->event->performances as $performance) {
             $remaining[$performance->id] = $events->remainingForPerformance($performance);
         }
 
-        return view('livewire.admin.events.show', [
+        return view('events::admin.show', [
             'remaining' => $remaining,
             'products' => Product::query()->active()->orderBy('name')->limit(100)->get(),
         ])->layout('layouts.admin', [

@@ -32,6 +32,7 @@ final class CustomerSecrets extends Component
 
     public function render()
     {
+        $this->authorize('digital_delivery.view');
         $deliveries = DigitalSecretDelivery::query()
             ->with('product')
             ->where('customer_id', $this->customer->id)
@@ -47,7 +48,7 @@ final class CustomerSecrets extends Component
             }
         }
 
-        return view('livewire.admin.digital-delivery.customer-section', [
+        return view('digital-delivery::admin.customer-section', [
             'deliveries' => $deliveries,
             'revealedValue' => $revealedValue,
         ]);

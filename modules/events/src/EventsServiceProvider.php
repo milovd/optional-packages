@@ -19,6 +19,7 @@ final class EventsServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'events');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'events');
     }
 
     public function module(): Module
