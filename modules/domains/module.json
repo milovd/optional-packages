@@ -1,7 +1,8 @@
 {
     "id": "domains",
     "name": "Domain",
-    "version": "1.1.0",
+    "version": "1.1.1",
+    "logo": "resources/images/logo.png",
     "description": "One domain surface for registration, renewals and DNS management.",
     "author": "Agovena",
     "agovena": ">=0.0.1 <0.1.0",

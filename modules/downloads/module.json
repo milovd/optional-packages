@@ -1,7 +1,8 @@
 {
     "id": "downloads",
     "name": "Downloads",
-    "version": "1.1.0",
+    "version": "1.1.1",
+    "logo": "resources/images/logo.png",
     "description": "Downloadable file assets and customer entitlements after payment.",
     "author": "Agovena",
     "agovena": ">=0.0.1 <0.1.0",

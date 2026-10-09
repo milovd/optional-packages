@@ -1,7 +1,8 @@
 {
     "id": "digital-delivery",
     "name": "Digital Delivery",
-    "version": "1.1.0",
+    "version": "1.1.1",
+    "logo": "resources/images/logo.png",
     "description": "Secure digital value fulfillment: keys, codes, licenses, credentials, and account secrets.",
     "author": "Agovena",
     "agovena": ">=0.0.1 <0.1.0",
