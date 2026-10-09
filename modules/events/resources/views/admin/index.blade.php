@@ -1,5 +1,6 @@
 <div class="admin-page">
     <x-ag.page-header :heading="__('events::admin.title')" :lede="__('events::admin.lede')" />
+    @includeIf('events::admin.partials.tabs', ['activeTab' => 'events'])
 
     @if (session('status'))
         <p class="ag-alert ag-alert--success" role="status">{{ session('status') }}</p>

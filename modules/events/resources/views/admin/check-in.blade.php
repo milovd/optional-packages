@@ -1,5 +1,6 @@
 <div class="admin-page">
     <x-ag.page-header :heading="__('events::admin.checkin_title')" :lede="__('events::admin.checkin_lede')" />
+    @includeIf('events::admin.partials.tabs', ['activeTab' => 'check-in'])
 
     <section class="admin-panel">
         <form class="ag-form" wire:submit="submit">
