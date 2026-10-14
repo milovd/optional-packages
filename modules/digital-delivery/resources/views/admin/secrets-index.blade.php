@@ -47,8 +47,8 @@
         @if ($products->isEmpty())
             <p class="ag-muted">{{ __('digital-delivery::admin.empty_products') }}</p>
         @else
-            <div class="ag-table-wrap">
-                <table class="ag-table">
+            <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('digital-delivery::admin.pools') }}" tabindex="0">
+                <table class="ag-table ag-table--mobile-cards">
                     <thead>
                         <tr>
                             <th>{{ __('common.product') }}</th>
@@ -59,9 +59,9 @@
                     <tbody>
                         @foreach ($products as $product)
                             <tr wire:key="pool-{{ $product->id }}">
-                                <td>{{ $product->name }}</td>
-                                <td>{{ $counts[$product->id]['available'] ?? 0 }}</td>
-                                <td>{{ $counts[$product->id]['allocated'] ?? 0 }}</td>
+                                <td data-label="{{ __('common.product') }}">{{ $product->name }}</td>
+                                <td data-label="{{ __('digital-delivery::admin.available') }}">{{ $counts[$product->id]['available'] ?? 0 }}</td>
+                                <td data-label="{{ __('digital-delivery::admin.allocated') }}">{{ $counts[$product->id]['allocated'] ?? 0 }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -79,8 +79,8 @@
         @if ($deliveries->isEmpty())
             <p class="ag-muted">{{ __('digital-delivery::admin.empty_deliveries') }}</p>
         @else
-            <div class="ag-table-wrap">
-                <table class="ag-table">
+            <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('digital-delivery::admin.deliveries') }}" tabindex="0">
+                <table class="ag-table ag-table--mobile-cards">
                     <thead>
                         <tr>
                             <th>{{ __('common.product') }}</th>
@@ -88,34 +88,37 @@
                             <th>{{ __('digital-delivery::admin.source') }}</th>
                             <th>{{ __('digital-delivery::admin.status') }}</th>
                             <th>{{ __('digital-delivery::admin.hint') }}</th>
-                            <th></th>
+                            @can('digital_delivery.manage')
+                                <th>{{ __('common.actions') }}</th>
+                            @endcan
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($deliveries as $delivery)
                             <tr wire:key="delivery-{{ $delivery->id }}">
-                                <td>{{ $delivery->product?->name }}</td>
-                                <td>{{ $delivery->order?->number }}</td>
-                                <td>{{ __('digital-delivery::admin.sources.'.$delivery->source) }}</td>
-                                <td>{{ __('digital-delivery::admin.statuses.'.$delivery->status) }}</td>
-                                <td><code class="ag-code">{{ $delivery->value_hint ?? '-' }}</code></td>
-                                <td>
-                                    @can('digital_delivery.manage')
+                                <td data-label="{{ __('common.product') }}">{{ $delivery->product?->name }}</td>
+                                <td data-label="{{ __('digital-delivery::admin.order') }}">{{ $delivery->order?->number }}</td>
+                                <td data-label="{{ __('digital-delivery::admin.source') }}">{{ __('digital-delivery::admin.sources.'.$delivery->source) }}</td>
+                                <td data-label="{{ __('digital-delivery::admin.status') }}"><x-ag.badge :variant="match ($delivery->status) { 'delivered' => 'success', 'pending_manual' => 'warning', 'revoked' => 'danger', default => 'muted' }">{{ __('digital-delivery::admin.statuses.'.$delivery->status) }}</x-ag.badge></td>
+                                <td data-label="{{ __('digital-delivery::admin.hint') }}"><code class="ag-code">{{ $delivery->value_hint ?? '-' }}</code></td>
+                                @can('digital_delivery.manage')
+                                    <td class="ag-table__actions" data-label="{{ __('common.actions') }}">
                                         @if ($delivery->isPendingManual())
                                             <button type="button" class="ag-btn ag-btn--secondary" wire:click="startAssign({{ $delivery->id }})">
                                                 {{ __('digital-delivery::admin.assign') }}
                                             </button>
                                         @elseif ($delivery->isDelivered())
-                                            <button type="button" class="ag-btn ag-btn--ghost" wire:click="revoke({{ $delivery->id }})">
+                                            <button type="button" class="ag-btn ag-btn--ghost" wire:click="revoke({{ $delivery->id }})" wire:confirm="{{ \Illuminate\Support\Facades\Lang::has('digital-delivery::admin.revoke_confirm') ? __('digital-delivery::admin.revoke_confirm', ['order' => $delivery->order?->number]) : __('common.confirm_consequential_action', ['action' => __('digital-delivery::admin.revoke'), 'name' => $delivery->order?->number]) }}">
                                                 {{ __('digital-delivery::admin.revoke') }}
                                             </button>
                                         @endif
-                                    @endcan
-                                </td>
+                                    </td>
+                                @endcan
                             </tr>
+                            @can('digital_delivery.manage')
                             @if ($assign_delivery_id === $delivery->id)
-                                <tr wire:key="assign-{{ $delivery->id }}">
-                                    <td colspan="6">
+                                <tr class="ag-table__form-row" wire:key="assign-{{ $delivery->id }}">
+                                    <td class="ag-table__form-cell" colspan="6">
                                         <form wire:submit="assign" class="ag-form">
                                             <div class="ag-field">
                                                 <label class="ag-field__label" for="ds-assign-{{ $delivery->id }}">
@@ -139,6 +142,7 @@
                                     </td>
                                 </tr>
                             @endif
+                            @endcan
                         @endforeach
                     </tbody>
                 </table>

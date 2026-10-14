@@ -43,29 +43,31 @@
     @if ($assets->isEmpty())
         <p class="ag-muted">{{ __('digital::admin.empty') }}</p>
     @else
-        <div class="ag-table-wrap">
-            <table class="ag-table">
+        <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('digital::admin.title') }}" tabindex="0">
+            <table class="ag-table ag-table--mobile-cards">
                 <thead>
                     <tr>
                         <th>{{ __('common.product') }}</th>
                         <th>{{ __('digital::admin.label') }}</th>
                         <th>{{ __('digital::admin.filename') }}</th>
                         <th>{{ __('digital::admin.download_limit') }}</th>
-                        <th></th>
+                        @can('digital.manage')
+                            <th>{{ __('common.actions') }}</th>
+                        @endcan
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($assets as $asset)
                         <tr wire:key="asset-{{ $asset->id }}">
-                            <td>{{ $asset->product?->name }}</td>
-                            <td>{{ $asset->label }}</td>
-                            <td>{{ $asset->filename }}</td>
-                            <td>{{ $asset->download_limit ?? '∞' }}</td>
-                            <td>
-                                @can('digital.manage')
-                                    <button type="button" class="ag-btn ag-btn--ghost" wire:click="delete({{ $asset->id }})">{{ __('common.delete') }}</button>
-                                @endcan
-                            </td>
+                            <td data-label="{{ __('common.product') }}">{{ $asset->product?->name }}</td>
+                            <td data-label="{{ __('digital::admin.label') }}">{{ $asset->label }}</td>
+                            <td data-label="{{ __('digital::admin.filename') }}">{{ $asset->filename }}</td>
+                            <td data-label="{{ __('digital::admin.download_limit') }}">{{ $asset->download_limit ?? '∞' }}</td>
+                            @can('digital.manage')
+                                <td class="ag-table__actions" data-label="{{ __('common.actions') }}">
+                                    <button type="button" class="ag-btn ag-btn--ghost" wire:click="delete({{ $asset->id }})" wire:confirm="{{ \Illuminate\Support\Facades\Lang::has('digital::admin.delete_confirm') ? __('digital::admin.delete_confirm', ['name' => $asset->filename]) : __('common.confirm_irreversible_delete', ['name' => $asset->filename]) }}">{{ __('common.delete') }}</button>
+                                </td>
+                            @endcan
                         </tr>
                     @endforeach
                 </tbody>
