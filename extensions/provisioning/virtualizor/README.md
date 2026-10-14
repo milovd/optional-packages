@@ -10,7 +10,7 @@ It is not a Module; the Provisioning Module stays generic.
 `production_ready: true`. Create, suspend, unsuspend, terminate, plan change,
 plan listing, status sync, panel and health are implemented against the
 Virtualizor Admin API documentation and covered by
-`agovena-platform/tests/Feature/VirtualizorProvisioningLifecycleTest.php`
+`agovena-platform/tests/Feature/Provisioning/VirtualizorProvisioningLifecycleTest.php`
 (`Http::fake`, no network, failure paths, secret-leak test). Live acceptance
 against a merchant panel is a separate operator check.
 

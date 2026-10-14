@@ -65,6 +65,8 @@ final class RegistrationsIndex extends Component
         DomainRegistrarRegistry $registrars,
         DomainDnsProviderRegistry $dnsProviders,
     ) {
+        $this->authorize('domains.view');
+
         $query = DomainRegistration::query()
             ->with(['product', 'customer'])
             ->orderByDesc('id');
@@ -72,7 +74,7 @@ final class RegistrationsIndex extends Component
             $query->where('status', $this->status);
         }
 
-        return view('livewire.admin.domains.index', [
+        return view('domains::admin.index', [
             'registrations' => $query->limit(100)->get(),
             'registrars' => $registrars->all(),
             'dnsProviders' => $dnsProviders->all(),

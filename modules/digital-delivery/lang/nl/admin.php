@@ -28,6 +28,7 @@ return [
     'assign_save' => 'Waarde leveren',
     'assigned' => 'Waarde geleverd aan de klant.',
     'revoke' => 'Intrekken',
+    'revoke_confirm' => 'De levering voor bestelling :order intrekken? De klant verliest hierdoor de toegang tot deze waarde.',
     'revoked' => 'Levering ingetrokken.',
     'reveal' => 'Weergeven',
     'conceal' => 'Verbergen',

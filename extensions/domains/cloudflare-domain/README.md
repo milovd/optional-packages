@@ -55,4 +55,4 @@ Customer DNS forms send an MX `priority` (0 to 65535). Records refused by Cloudf
 
 `production_ready` is `true` for the operations above. Renewal, transfers and premium registrations stay explicitly unsupported. Live Cloudflare acceptance (a real registration and DNS change on a merchant account) is a separate operator check.
 
-Regression tests live in Core: `tests/Feature/CloudflareDomainReadinessTest.php` and `tests/Feature/CustomerDomainDnsTest.php`.
+Regression tests live in Core: `tests/Feature/Domains/CloudflareDomainReadinessTest.php` and `tests/Feature/Domains/CustomerDomainDnsTest.php`.

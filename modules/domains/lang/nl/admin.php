@@ -18,7 +18,9 @@ return [
     'awaiting_domain' => 'Domeinnaam in afwachting',
     'not_configured' => 'Niet ingesteld',
     'register' => 'Registreren',
+    'register_confirm' => ':domain bij de registrar registreren? Dit kan kosten met zich meebrengen.',
     'renew' => 'Een jaar verlengen',
+    'renew_confirm' => ':domain bij de registrar met een jaar verlengen? Dit kan kosten met zich meebrengen.',
     'ensure_dns_zone' => 'DNS-zone voorbereiden',
     'flash' => [
         'registered' => 'De registratieaanvraag is naar de provider verstuurd.',

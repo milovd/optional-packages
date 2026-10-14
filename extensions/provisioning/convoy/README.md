@@ -17,7 +17,7 @@ below before supporting another version.
 `production_ready: true`. Create, suspend, unsuspend, terminate, resource limit
 change, status sync, panel and health are implemented against the v4.6.1
 source and covered by
-`agovena-platform/tests/Feature/ConvoyProvisioningLifecycleTest.php`
+`agovena-platform/tests/Feature/Provisioning/ConvoyProvisioningLifecycleTest.php`
 (`Http::fake`, no network). Live acceptance against a merchant panel is a
 separate operator check.
 

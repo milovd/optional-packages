@@ -1,12 +1,12 @@
 {
     "id": "cpanel",
     "name": "CPanel",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Provisioning Extension for cPanel and WHM hosting accounts.",
     "production_ready": true,
     "author": "Agovena",
     "category": "provisioning",
-    "agovena": "^0.0.1",
+    "agovena": ">=0.0.1 <0.1.0",
     "provider": "Agovena\\Extensions\\CPanel\\CPanelServiceProvider",
     "dependencies": [],
     "module_dependencies": [

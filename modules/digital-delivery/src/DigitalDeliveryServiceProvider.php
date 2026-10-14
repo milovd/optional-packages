@@ -19,6 +19,7 @@ final class DigitalDeliveryServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'digital-delivery');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'digital-delivery');
     }
 
     public function module(): Module

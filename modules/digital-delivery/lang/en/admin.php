@@ -28,6 +28,7 @@ return [
     'assign_save' => 'Deliver value',
     'assigned' => 'Value delivered to the customer.',
     'revoke' => 'Revoke',
+    'revoke_confirm' => 'Revoke the delivery for order :order? The customer will lose access to this value.',
     'revoked' => 'Delivery revoked.',
     'reveal' => 'Reveal',
     'conceal' => 'Hide',

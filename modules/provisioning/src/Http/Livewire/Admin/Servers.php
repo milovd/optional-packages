@@ -161,7 +161,9 @@ final class Servers extends Component
 
     public function render(AdminRegistrar $admin)
     {
-        return view('livewire.admin.provisioning.servers', [
+        $this->authorize('provisioning.manage');
+
+        return view('provisioning::admin.servers', [
             'servers' => ProvisioningServer::query()->orderBy('name')->get(),
             'providers' => $this->providers(),
             'settingDefinitions' => $this->settingDefinitions(),

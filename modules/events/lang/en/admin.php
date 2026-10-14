@@ -5,6 +5,7 @@ declare(strict_types=1);
 return [
     'title' => 'Events',
     'lede' => 'Timed performances and ticket products. Tickets are issued after payment.',
+    'tabs_label' => 'Event sections',
     'create' => 'Create event',
     'name' => 'Name',
     'venue' => 'Venue',
