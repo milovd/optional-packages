@@ -21,8 +21,8 @@
     @if ($registrations->isEmpty())
         <p class="ag-muted">{{ __('domains::admin.empty') }}</p>
     @else
-        <div class="ag-table-wrap">
-            <table class="ag-table">
+        <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('domains::admin.title') }}" tabindex="0">
+            <table class="ag-table ag-table--mobile-cards">
                 <thead>
                     <tr>
                         <th>{{ __('domains::admin.number') }}</th>
@@ -47,34 +47,45 @@
                             $hasDnsZone = is_array($registration->meta)
                                 && is_array($registration->meta['dns_zone'] ?? null)
                                 && filled($registration->meta['dns_zone']['zone_reference'] ?? null);
+                            // The mirrored legacy Core view must also work with older installed Modules.
+                            $registerConfirmation = \Illuminate\Support\Facades\Lang::has('domains::admin.register_confirm')
+                                ? __('domains::admin.register_confirm', ['domain' => $registration->domain_name])
+                                : __('common.confirm_external_action', ['action' => __('domains::admin.register'), 'name' => $registration->domain_name]);
+                            $renewConfirmation = \Illuminate\Support\Facades\Lang::has('domains::admin.renew_confirm')
+                                ? __('domains::admin.renew_confirm', ['domain' => $registration->domain_name])
+                                : __('common.confirm_external_action', ['action' => __('domains::admin.renew'), 'name' => $registration->domain_name]);
                         @endphp
                         <tr wire:key="domain-{{ $registration->id }}">
-                            <td>{{ $registration->number }}</td>
-                            <td>{{ $registration->domain_name ?? __('domains::admin.awaiting_domain') }}</td>
-                            <td>{{ $registration->customer_email ?? $registration->customer?->email ?? '-' }}</td>
-                            <td>{{ __('domains::admin.status.'.$registration->status->value) }}</td>
-                            <td>
-                                <strong>{{ $registrarKey ?? __('domains::admin.not_configured') }}</strong>
-                                @if ($registrar)
-                                    <small class="ag-muted">{{ implode(', ', $registrar->capabilities()) }}</small>
-                                @endif
+                            <td data-label="{{ __('domains::admin.number') }}">{{ $registration->number }}</td>
+                            <td data-label="{{ __('domains::admin.domain') }}">{{ $registration->domain_name ?? __('domains::admin.awaiting_domain') }}</td>
+                            <td data-label="{{ __('domains::admin.customer') }}">{{ $registration->customer_email ?? $registration->customer?->email ?? '-' }}</td>
+                            <td data-label="{{ __('domains::admin.status_label') }}"><x-ag.badge :variant="match ($registration->status->value) { 'active' => 'success', 'failed' => 'danger', 'renewal_due', 'expired' => 'warning', 'pending', 'checking', 'registering', 'transfer_pending' => 'info', default => 'muted' }">{{ __('domains::admin.status.'.$registration->status->value) }}</x-ag.badge></td>
+                            <td data-label="{{ __('domains::admin.registrar') }}">
+                                <div class="ag-table__primary">
+                                    <strong>{{ $registrarKey ?? __('domains::admin.not_configured') }}</strong>
+                                    @if ($registrar)
+                                        <small class="ag-muted">{{ implode(', ', $registrar->capabilities()) }}</small>
+                                    @endif
+                                </div>
                             </td>
-                            <td>
-                                <strong>{{ $registration->dns_provider_key ?? __('domains::admin.not_configured') }}</strong>
-                                @if ($dnsProvider)
-                                    <small class="ag-muted">{{ implode(', ', $dnsProvider->capabilities()) }}</small>
-                                @endif
+                            <td data-label="{{ __('domains::admin.dns_provider') }}">
+                                <div class="ag-table__primary">
+                                    <strong>{{ $registration->dns_provider_key ?? __('domains::admin.not_configured') }}</strong>
+                                    @if ($dnsProvider)
+                                        <small class="ag-muted">{{ implode(', ', $dnsProvider->capabilities()) }}</small>
+                                    @endif
+                                </div>
                             </td>
                             @if ($canManage)
-                                <td>
+                                <td class="ag-table__actions" data-label="{{ __('domains::admin.actions') }}">
                                     <div class="ag-toolbar">
                                         @if (in_array($registration->status->value, ['pending', 'failed'], true) && $registration->domain_name)
-                                            <button type="button" class="ag-btn ag-btn--secondary ag-btn--sm" wire:click="register({{ $registration->id }})" wire:loading.attr="disabled" wire:target="register({{ $registration->id }})">
+                                            <button type="button" class="ag-btn ag-btn--secondary ag-btn--sm" wire:click="register({{ $registration->id }})" wire:confirm="{{ $registerConfirmation }}" wire:loading.attr="disabled" wire:target="register({{ $registration->id }})">
                                                 {{ __('domains::admin.register') }}
                                             </button>
                                         @endif
                                         @if (in_array($registration->status->value, ['active', 'renewal_due'], true))
-                                            <button type="button" class="ag-btn ag-btn--secondary ag-btn--sm" wire:click="renew({{ $registration->id }})" wire:loading.attr="disabled" wire:target="renew({{ $registration->id }})">
+                                            <button type="button" class="ag-btn ag-btn--secondary ag-btn--sm" wire:click="renew({{ $registration->id }})" wire:confirm="{{ $renewConfirmation }}" wire:loading.attr="disabled" wire:target="renew({{ $registration->id }})">
                                                 {{ __('domains::admin.renew') }}
                                             </button>
                                         @endif

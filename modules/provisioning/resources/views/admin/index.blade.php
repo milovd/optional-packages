@@ -25,8 +25,8 @@
     @if ($instances->isEmpty())
         <p class="ag-muted">{{ __('provisioning::admin.empty') }}</p>
     @else
-        <div class="ag-table-wrap">
-            <table class="ag-table">
+        <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('provisioning::admin.title') }}" tabindex="0">
+            <table class="ag-table ag-table--mobile-cards">
                 <thead>
                     <tr>
                         <th>{{ __('provisioning::admin.number') }}</th>
@@ -40,14 +40,15 @@
                 <tbody>
                     @foreach ($instances as $instance)
                         <tr wire:key="svc-{{ $instance->id }}">
-                            <td><a class="ag-table__name" href="{{ route('admin.provisioning.show', $instance) }}">{{ $instance->number }}</a></td>
-                            <td>{{ $instance->product?->name }}</td>
-                            <td>{{ $instance->customer_email }}</td>
-                            <td>{{ __('provisioning::status.'.$instance->status->value) }}</td>
-                            <td>{{ $instance->external_ref ?? '-' }}</td>
-                            <td class="ag-table__actions">
-                                <a class="ag-icon-btn" href="{{ route('admin.provisioning.show', $instance) }}" title="{{ __('common.view') }}" aria-label="{{ __('common.view') }}">
+                            <td data-label="{{ __('provisioning::admin.number') }}"><a class="ag-table__name" href="{{ route('admin.provisioning.show', $instance) }}">{{ $instance->number }}</a></td>
+                            <td data-label="{{ __('common.product') }}">{{ $instance->product?->name ?? '-' }}</td>
+                            <td data-label="{{ __('provisioning::admin.customer') }}">{{ $instance->customer_email ?? '-' }}</td>
+                            <td data-label="{{ __('provisioning::admin.status') }}"><x-ag.badge :variant="match ($instance->status->value) { 'active' => 'success', 'failed' => 'danger', 'suspended', 'manual_review' => 'warning', 'pending', 'provisioning' => 'info', default => 'muted' }">{{ __('provisioning::status.'.$instance->status->value) }}</x-ag.badge></td>
+                            <td data-label="{{ __('provisioning::admin.external_ref') }}">{{ $instance->external_ref ?? '-' }}</td>
+                            <td class="ag-table__actions" data-label="{{ __('common.actions') }}">
+                                <a class="ag-icon-btn" href="{{ route('admin.provisioning.show', $instance) }}" title="{{ __('provisioning::admin.details') }}" aria-label="{{ __('provisioning::admin.details') }} {{ $instance->number }}">
                                     <x-ag.icon name="eye" :size="16" />
+                                    <span class="ag-table__action-label">{{ __('provisioning::admin.details') }}</span>
                                 </a>
                             </td>
                         </tr>

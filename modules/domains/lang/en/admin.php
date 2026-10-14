@@ -18,7 +18,9 @@ return [
     'awaiting_domain' => 'Domain name pending',
     'not_configured' => 'Not configured',
     'register' => 'Register',
+    'register_confirm' => 'Register :domain with the registrar? This may incur charges.',
     'renew' => 'Renew one year',
+    'renew_confirm' => 'Renew :domain for one year with the registrar? This may incur charges.',
     'ensure_dns_zone' => 'Prepare DNS zone',
     'flash' => [
         'registered' => 'The domain registration request was sent.',
