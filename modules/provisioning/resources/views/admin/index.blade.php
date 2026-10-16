@@ -19,6 +19,7 @@
             <option value="suspended">{{ __('provisioning::status.suspended') }}</option>
             <option value="terminated">{{ __('provisioning::status.terminated') }}</option>
             <option value="failed">{{ __('provisioning::status.failed') }}</option>
+            <option value="manual_review">{{ __('provisioning::status.manual_review') }}</option>
         </select>
     </div>
 
