@@ -1,7 +1,8 @@
 {
     "id": "mollie",
     "name": "Mollie",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "Payment Extension for Mollie hosted checkout, webhooks, refunds, and status sync.",
     "author": "Agovena",
     "category": "payment_gateway",

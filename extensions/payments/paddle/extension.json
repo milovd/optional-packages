@@ -1,7 +1,8 @@
 {
     "id": "paddle",
     "name": "Paddle",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "First-party Paddle Billing gateway for hosted checkout, signed webhooks, and refunds.",
     "author": "Agovena",
     "category": "payment_gateway",

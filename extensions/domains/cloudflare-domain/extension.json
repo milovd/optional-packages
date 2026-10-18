@@ -1,7 +1,8 @@
 {
     "id": "cloudflare-domain",
     "name": "Cloudflare Domains",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "Cloudflare domain availability, registration and DNS management in one provider integration.",
     "author": "Agovena",
     "category": "domain",

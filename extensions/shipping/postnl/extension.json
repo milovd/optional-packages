@@ -1,7 +1,8 @@
 {
     "id": "postnl",
     "name": "PostNL",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "Shipping Extension for PostNL barcodes, labels, tracking, and optional live quotes.",
     "author": "Agovena",
     "category": "shipping",

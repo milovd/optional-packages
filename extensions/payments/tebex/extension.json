@@ -1,7 +1,8 @@
 {
     "id": "tebex",
     "name": "Tebex",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "First-party Tebex Checkout gateway using custom order-priced items without product mapping, signed webhooks, provider-managed recurring payments, and full refunds.",
     "author": "Agovena",
     "category": "payment_gateway",

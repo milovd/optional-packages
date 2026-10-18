@@ -1,7 +1,7 @@
 {
     "id": "pterodactyl",
     "name": "Pterodactyl",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "logo": "resources/images/logo.png",
     "description": "Provisioning Extension for Pterodactyl panel servers.",
     "author": "Agovena",

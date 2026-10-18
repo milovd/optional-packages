@@ -1,7 +1,8 @@
 {
     "id": "cpanel",
     "name": "CPanel",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "Provisioning Extension for cPanel and WHM hosting accounts.",
     "production_ready": true,
     "author": "Agovena",

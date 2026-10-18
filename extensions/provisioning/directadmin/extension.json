@@ -1,7 +1,8 @@
 {
     "id": "directadmin",
     "name": "DirectAdmin",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "Provisioning Extension for DirectAdmin hosting accounts (create, suspend, unsuspend, terminate, package change, status sync).",
     "production_ready": true,
     "author": "Agovena",

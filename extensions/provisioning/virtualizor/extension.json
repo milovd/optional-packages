@@ -1,7 +1,8 @@
 {
     "id": "virtualizor",
     "name": "Virtualizor",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "logo": "resources/images/logo.png",
     "description": "Provisioning Extension for Virtualizor VPSs (create, suspend, unsuspend, terminate, plan change, status sync).",
     "production_ready": true,
     "author": "Agovena",
