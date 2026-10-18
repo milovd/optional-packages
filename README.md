@@ -33,4 +33,4 @@ Please open focused issues and pull requests with the affected package clearly i
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+The code is MIT licensed. See [LICENSE](LICENSE). Bundled third-party photographs are separately licensed under CC BY 2.0; their credits, source links, modifications and license terms travel with the owning packages: [Events](modules/events/resources/images/ATTRIBUTION.md) and [Provisioning](modules/provisioning/resources/images/ATTRIBUTION.md). The repository's MIT grant does not replace these photo licenses.

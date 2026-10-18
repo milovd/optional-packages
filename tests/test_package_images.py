@@ -12,9 +12,13 @@ IMAGE_PACKAGES = {
     "modules/digital-delivery": ("digital-delivery", "1.1.1"),
     "modules/domains": ("domains", "1.1.1"),
     "modules/downloads": ("downloads", "1.1.1"),
-    "modules/events": ("events", "1.1.1"),
-    "modules/provisioning": ("provisioning", "1.1.1"),
+    "modules/events": ("events", "1.1.2"),
+    "modules/provisioning": ("provisioning", "1.1.2"),
     "extensions/provisioning/pterodactyl": ("pterodactyl", "1.0.2"),
+}
+PHOTO_PACKAGES = {
+    "modules/events": ("https://commons.wikimedia.org/wiki/File:Rows_of_empty_theatre_seats_(29592010815).jpg", "Thomas Quine"),
+    "modules/provisioning": ("https://commons.wikimedia.org/wiki/File:Datacenter_Server_Racks_(22370909788).jpg", "Carl Lender"),
 }
 
 
@@ -66,6 +70,21 @@ class PackageImagesTest(unittest.TestCase):
                 manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
                 if "logo" in manifest:
                     self.assertIsNotNone(image_path(manifest_file.parent, manifest["logo"]))
+
+    def test_photo_packages_keep_individual_credits_with_the_image(self):
+        for package_name, (source, creator) in PHOTO_PACKAGES.items():
+            with self.subTest(package=package_name):
+                package = ROOT / package_name
+                photo = package / "resources/images/logo.png"
+                self.assertEqual(image_path(package, "resources/images/logo.png"), photo)
+                with photo.open("rb") as image:
+                    image.seek(16)
+                    self.assertEqual(struct.unpack(">II", image.read(8)), (320, 400))
+                notice = (package / "resources/images/ATTRIBUTION.md").read_text(encoding="utf-8")
+                self.assertIn("logo.png", notice)
+                self.assertIn(source, notice)
+                self.assertIn(creator, notice)
+                self.assertIn("https://creativecommons.org/licenses/by/2.0/", notice)
 
     def test_missing_and_unsafe_images_have_no_usable_image(self):
         package = ROOT / "extensions/payments/stripe"

@@ -1,7 +1,7 @@
 {
     "id": "events",
     "name": "Events",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "logo": "resources/images/logo.png",
     "description": "Timed admission for theatre, concerts, workshops, and conferences. Ticket products issue unique tickets after payment.",
     "author": "Agovena",
