@@ -1,4 +1,4 @@
-<div class="admin-page">
+<div class="admin-page ag-list-page">
     <x-ag.page-header :heading="__('digital::admin.title')" :lede="__('digital::admin.lede')" />
 
     @if (session('status'))
@@ -6,11 +6,11 @@
     @endif
 
     @can('digital.manage')
-        <form wire:submit="save" class="ag-form ag-section" style="margin-bottom: 1.5rem;" enctype="multipart/form-data">
-            <header class="ag-section__header">
-                <h3 class="ag-section__title">{{ __('digital::admin.add') }}</h3>
+        <form wire:submit="save" class="ag-card ag-form" aria-labelledby="digital-add-heading" enctype="multipart/form-data">
+            <header class="ag-card__header">
+                <h2 id="digital-add-heading" class="ag-card__title">{{ __('digital::admin.add') }}</h2>
             </header>
-            <div class="ag-section__body ag-grid ag-grid--2">
+            <div class="ag-card__content ag-grid ag-grid--2">
                 <div class="ag-field">
                     <label class="ag-field__label" for="d-product">{{ __('common.product') }}</label>
                     <select id="d-product" class="ag-select" wire:model="product_id" required>
@@ -24,11 +24,13 @@
                 <div class="ag-field">
                     <label class="ag-field__label" for="d-label">{{ __('digital::admin.label') }}</label>
                     <input id="d-label" class="ag-input" type="text" wire:model="label" required>
+                    @error('label') <p class="ag-field__error">{{ $message }}</p> @enderror
                 </div>
                 <div class="ag-field">
                     <label class="ag-field__label" for="d-limit">{{ __('digital::admin.download_limit') }}</label>
                     <input id="d-limit" class="ag-input" type="number" min="1" wire:model="download_limit">
                     <p class="ag-field__hint">{{ __('digital::admin.download_limit_hint') }}</p>
+                    @error('download_limit') <p class="ag-field__error">{{ $message }}</p> @enderror
                 </div>
                 <div class="ag-field">
                     <label class="ag-field__label" for="d-file">{{ __('digital::admin.file') }}</label>
@@ -36,23 +38,27 @@
                     @error('file') <p class="ag-field__error">{{ $message }}</p> @enderror
                 </div>
             </div>
-            <button type="submit" class="ag-btn ag-btn--primary">{{ __('digital::admin.save') }}</button>
+            <footer class="ag-card__footer">
+                <button type="submit" class="ag-btn ag-btn--primary" wire:loading.attr="disabled" wire:target="save,file">{{ __('digital::admin.save') }}</button>
+            </footer>
         </form>
     @endcan
 
     @if ($assets->isEmpty())
-        <p class="ag-muted">{{ __('digital::admin.empty') }}</p>
+        <div class="ag-empty" role="status">
+            <p class="ag-empty__title">{{ __('digital::admin.empty') }}</p>
+        </div>
     @else
         <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('digital::admin.title') }}" tabindex="0">
             <table class="ag-table ag-table--mobile-cards">
                 <thead>
                     <tr>
-                        <th>{{ __('common.product') }}</th>
-                        <th>{{ __('digital::admin.label') }}</th>
-                        <th>{{ __('digital::admin.filename') }}</th>
-                        <th>{{ __('digital::admin.download_limit') }}</th>
+                        <th scope="col">{{ __('common.product') }}</th>
+                        <th scope="col">{{ __('digital::admin.label') }}</th>
+                        <th scope="col">{{ __('digital::admin.filename') }}</th>
+                        <th scope="col">{{ __('digital::admin.download_limit') }}</th>
                         @can('digital.manage')
-                            <th>{{ __('common.actions') }}</th>
+                            <th scope="col">{{ __('common.actions') }}</th>
                         @endcan
                     </tr>
                 </thead>
@@ -65,7 +71,7 @@
                             <td data-label="{{ __('digital::admin.download_limit') }}">{{ $asset->download_limit ?? '∞' }}</td>
                             @can('digital.manage')
                                 <td class="ag-table__actions" data-label="{{ __('common.actions') }}">
-                                    <button type="button" class="ag-btn ag-btn--ghost" wire:click="delete({{ $asset->id }})" wire:confirm="{{ \Illuminate\Support\Facades\Lang::has('digital::admin.delete_confirm') ? __('digital::admin.delete_confirm', ['name' => $asset->filename]) : __('common.confirm_irreversible_delete', ['name' => $asset->filename]) }}">{{ __('common.delete') }}</button>
+                                    <button type="button" class="ag-btn ag-btn--ghost" aria-label="{{ __('common.delete') }} {{ $asset->filename }}" wire:click="delete({{ $asset->id }})" wire:confirm="{{ \Illuminate\Support\Facades\Lang::has('digital::admin.delete_confirm') ? __('digital::admin.delete_confirm', ['name' => $asset->filename]) : __('common.confirm_irreversible_delete', ['name' => $asset->filename]) }}">{{ __('common.delete') }}</button>
                                 </td>
                             @endcan
                         </tr>
