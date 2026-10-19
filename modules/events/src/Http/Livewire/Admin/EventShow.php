@@ -31,7 +31,7 @@ final class EventShow extends Component
 
     public string $performance_starts_at = '';
 
-    public int $performance_capacity = 100;
+    public ?int $performance_capacity = null;
 
     public ?int $ticket_product_id = null;
 
@@ -47,6 +47,9 @@ final class EventShow extends Component
         $this->venue = (string) ($event->venue ?? '');
         $this->description = (string) ($event->description ?? '');
         $this->status = $event->status->value;
+        // Livewire skips null when hydrating typed properties, so the form default lives here:
+        // a cleared capacity then stays empty and fails validation instead of reverting to it.
+        $this->performance_capacity = 100;
     }
 
     public function save(): void
