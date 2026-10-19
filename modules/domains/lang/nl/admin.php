@@ -13,7 +13,10 @@ return [
     'provider' => 'Registrar',
     'registrar' => 'Registrar',
     'dns_provider' => 'DNS-provider',
-    'capabilities' => 'Mogelijkheden',
+    'capabilities' => [
+        'domain_registration' => 'Domeinregistratie',
+        'domain_registration_help' => 'Maakt en beheert een domeinregistratie via de gekozen registrar en DNS-provider.',
+    ],
     'actions' => 'Acties',
     'awaiting_domain' => 'Domeinnaam in afwachting',
     'not_configured' => 'Niet ingesteld',

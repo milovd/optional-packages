@@ -13,7 +13,10 @@ return [
     'provider' => 'Registrar',
     'registrar' => 'Registrar',
     'dns_provider' => 'DNS provider',
-    'capabilities' => 'Capabilities',
+    'capabilities' => [
+        'domain_registration' => 'Domain registration',
+        'domain_registration_help' => 'Creates and manages a domain registration through the selected registrar and DNS provider.',
+    ],
     'actions' => 'Actions',
     'awaiting_domain' => 'Domain name pending',
     'not_configured' => 'Not configured',
