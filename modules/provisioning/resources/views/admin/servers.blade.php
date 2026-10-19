@@ -5,6 +5,13 @@
         </x-slot:actions>
     </x-ag.page-header>
 
+    @if (session('status'))
+        <p class="ag-alert ag-alert--success" role="status">{{ session('status') }}</p>
+    @endif
+    @if (session('error'))
+        <p class="ag-alert ag-alert--danger" role="alert">{{ session('error') }}</p>
+    @endif
+
     <div class="ag-grid ag-grid--2">
         <section class="ag-section">
             <header class="ag-section__header"><h3 class="ag-section__title">{{ __('provisioning::admin.configured_servers') }}</h3></header>
