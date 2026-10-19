@@ -7,27 +7,29 @@
     @endif
 
     @can('events.manage')
-        <section class="admin-panel c-events__section">
-            <div class="c-events__heading">
+        <section class="ag-card c-events__section" aria-labelledby="event-create-heading">
+            <header class="ag-card__header c-events__heading">
                 <x-ag.icon-tile name="calendar" tone="blue" :size="20" />
-                <h2 class="admin-panel__title">{{ __('events::admin.create') }}</h2>
+                <h2 id="event-create-heading" class="ag-card__title">{{ __('events::admin.create') }}</h2>
+            </header>
+            <div class="ag-card__content">
+                <form class="ag-form c-events__form" wire:submit="create">
+                    <div class="c-events__fields">
+                        <div class="ag-field">
+                            <label class="ag-field__label" for="event-name">{{ __('events::admin.name') }}</label>
+                            <input id="event-name" class="ag-input" wire:model="name">
+                            @error('name') <p class="ag-field__error">{{ $message }}</p> @enderror
+                        </div>
+                        <div class="ag-field">
+                            <label class="ag-field__label" for="event-venue">{{ __('events::admin.venue') }}</label>
+                            <input id="event-venue" class="ag-input" wire:model="venue">
+                        </div>
+                    </div>
+                    <div class="c-events__actions">
+                        <button class="ag-btn ag-btn--primary" type="submit">{{ __('events::admin.create') }}</button>
+                    </div>
+                </form>
             </div>
-            <form class="ag-form c-events__form" wire:submit="create">
-                <div class="c-events__fields">
-                    <div class="ag-field">
-                        <label class="ag-field__label" for="event-name">{{ __('events::admin.name') }}</label>
-                        <input id="event-name" class="ag-input" wire:model="name">
-                        @error('name') <p class="ag-field__error">{{ $message }}</p> @enderror
-                    </div>
-                    <div class="ag-field">
-                        <label class="ag-field__label" for="event-venue">{{ __('events::admin.venue') }}</label>
-                        <input id="event-venue" class="ag-input" wire:model="venue">
-                    </div>
-                </div>
-                <div class="c-events__actions">
-                    <button class="ag-btn ag-btn--primary" type="submit">{{ __('events::admin.create') }}</button>
-                </div>
-            </form>
         </section>
     @endcan
 
