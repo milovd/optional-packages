@@ -35,9 +35,13 @@ final class ProductEventTab extends Component
 
     public string $startsAt = '';
 
-    public int $capacity = 100;
+    /** Nullable so a cleared field fails validation; Livewire keeps the class default for null. */
+    public ?int $capacity = null;
 
     public string $ticketName = '';
+
+    /** Result of the last save. Kept local: this tab is nested in the product editor, which shows session feedback. */
+    public ?string $feedback = null;
 
     public function mount(Product $product): void
     {
@@ -45,6 +49,7 @@ final class ProductEventTab extends Component
         $this->product = $product;
         $this->eventName = $product->name;
         $this->ticketName = $product->name;
+        $this->capacity = 100;
 
         $ticketType = EventTicketType::query()
             ->with(['event', 'performance'])
@@ -118,7 +123,7 @@ final class ProductEventTab extends Component
             $this->performanceId = $performance->id;
         });
 
-        session()->flash('status', __('events::admin.product_event_saved'));
+        $this->feedback = __('events::admin.product_event_saved');
     }
 
     public function render()

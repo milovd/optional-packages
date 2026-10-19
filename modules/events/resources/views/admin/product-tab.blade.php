@@ -4,6 +4,10 @@
         <p class="ag-section__lede">{{ __('events::admin.product_event_lede') }}</p>
     </header>
     <form class="ag-section__body ag-form" wire:submit="save">
+        @if (! empty($feedback))
+            <p class="ag-alert ag-alert--success" role="status">{{ $feedback }}</p>
+        @endif
+
         <div class="ag-grid ag-grid--2">
             <div class="ag-field">
                 <label class="ag-field__label" for="product-event-name">{{ __('events::admin.name') }}</label>
