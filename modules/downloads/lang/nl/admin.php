@@ -14,6 +14,7 @@ return [
     'save' => 'Bestand opslaan',
     'saved' => 'Digitaal bestand opgeslagen.',
     'deleted' => 'Digitaal bestand verwijderd.',
+    'delete_confirm' => ':name verwijderen? Klanten kunnen hierdoor de toegang tot deze download verliezen. Dit kan niet ongedaan worden gemaakt.',
     'empty' => 'Nog geen digitale bestanden.',
     'customer_heading' => 'Downloads',
     'customer_empty' => 'Geen downloadrechten voor deze klant.',

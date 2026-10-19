@@ -11,7 +11,7 @@ It is not a Module; the Provisioning Module stays generic.
 plan listing, status sync, panel and health are implemented against the
 official Enhance orchd OpenAPI specification (version 12.25.14,
 <https://apidocs.enhance.com/>) and covered by
-`agovena-platform/tests/Feature/EnhanceProvisioningLifecycleTest.php`
+`agovena-platform/tests/Feature/Provisioning/EnhanceProvisioningLifecycleTest.php`
 (`Http::fake`, no network). Live acceptance against a merchant control panel is
 a separate operator check.
 

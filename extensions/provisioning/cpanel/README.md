@@ -9,7 +9,7 @@ It is not a Module; the Provisioning Module stays generic.
 
 `production_ready: true`. Every advertised operation below is implemented
 against the WHM API 1 specification and covered by
-`agovena-platform/tests/Feature/CPanelProvisioningLifecycleTest.php`
+`agovena-platform/tests/Feature/Provisioning/CPanelProvisioningLifecycleTest.php`
 (`Http::fake`, no network).
 
 ## Merchant setup

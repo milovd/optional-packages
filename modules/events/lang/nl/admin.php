@@ -5,6 +5,7 @@ declare(strict_types=1);
 return [
     'title' => 'Evenementen',
     'lede' => 'Voorstellingen en ticketproducten. Tickets worden na betaling uitgegeven.',
+    'tabs_label' => 'Evenementonderdelen',
     'create' => 'Evenement aanmaken',
     'name' => 'Naam',
     'venue' => 'Locatie',

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a bug or request a feature
+    url: https://github.com/milovd/Agovena/issues/new/choose
+    about: Issues for Modules and Extensions are tracked in the main Agovena repository.
+  - name: Report a security vulnerability
+    url: https://github.com/milovd/Agovena/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Provider documentation
+    url: https://agovena.com/docs/providers
+    about: Setup and supported operations for each Extension.
