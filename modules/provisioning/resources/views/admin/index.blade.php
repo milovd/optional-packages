@@ -1,4 +1,4 @@
-<div class="admin-page">
+<div class="admin-page ag-list-page">
     <x-ag.page-header :heading="__('provisioning::admin.title')" :lede="__('provisioning::admin.lede')">
         @can('provisioning.manage')
             <x-slot:actions>
@@ -10,32 +10,39 @@
         @endcan
     </x-ag.page-header>
 
-    <div class="ag-toolbar" style="margin-bottom: 1rem;">
-        <select class="ag-select" wire:model.live="status" aria-label="{{ __('provisioning::admin.filter_status') }}">
-            <option value="">{{ __('provisioning::admin.all_statuses') }}</option>
-            <option value="pending">{{ __('provisioning::status.pending') }}</option>
-            <option value="provisioning">{{ __('provisioning::status.provisioning') }}</option>
-            <option value="active">{{ __('provisioning::status.active') }}</option>
-            <option value="suspended">{{ __('provisioning::status.suspended') }}</option>
-            <option value="terminated">{{ __('provisioning::status.terminated') }}</option>
-            <option value="failed">{{ __('provisioning::status.failed') }}</option>
-            <option value="manual_review">{{ __('provisioning::status.manual_review') }}</option>
-        </select>
-    </div>
+    <x-ag.table-toolbar filters>
+        <div class="ag-toolbar__filters">
+            <div class="ag-field ag-field--inline">
+                <label class="visually-hidden" for="provisioning-status">{{ __('provisioning::admin.filter_status') }}</label>
+                <select id="provisioning-status" class="ag-select" wire:model.live="status">
+                    <option value="">{{ __('provisioning::admin.all_statuses') }}</option>
+                    <option value="pending">{{ __('provisioning::status.pending') }}</option>
+                    <option value="provisioning">{{ __('provisioning::status.provisioning') }}</option>
+                    <option value="active">{{ __('provisioning::status.active') }}</option>
+                    <option value="suspended">{{ __('provisioning::status.suspended') }}</option>
+                    <option value="terminated">{{ __('provisioning::status.terminated') }}</option>
+                    <option value="failed">{{ __('provisioning::status.failed') }}</option>
+                    <option value="manual_review">{{ __('provisioning::status.manual_review') }}</option>
+                </select>
+            </div>
+        </div>
+    </x-ag.table-toolbar>
 
     @if ($instances->isEmpty())
-        <p class="ag-muted">{{ __('provisioning::admin.empty') }}</p>
+        <div class="ag-empty" role="status">
+            <p class="ag-empty__title">{{ __('provisioning::admin.empty') }}</p>
+        </div>
     @else
-        <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('provisioning::admin.title') }}" tabindex="0">
+        <div class="ag-table-wrap ag-table-wrap--mobile-cards" role="region" aria-label="{{ __('provisioning::admin.title') }}" tabindex="0" wire:loading.class="is-loading" wire:target="status">
             <table class="ag-table ag-table--mobile-cards">
                 <thead>
                     <tr>
-                        <th>{{ __('provisioning::admin.number') }}</th>
-                        <th>{{ __('common.product') }}</th>
-                        <th>{{ __('provisioning::admin.customer') }}</th>
-                        <th>{{ __('provisioning::admin.status') }}</th>
-                        <th>{{ __('provisioning::admin.external_ref') }}</th>
-                        <th></th>
+                        <th scope="col">{{ __('provisioning::admin.number') }}</th>
+                        <th scope="col">{{ __('common.product') }}</th>
+                        <th scope="col">{{ __('provisioning::admin.customer') }}</th>
+                        <th scope="col">{{ __('provisioning::admin.status') }}</th>
+                        <th scope="col">{{ __('provisioning::admin.external_ref') }}</th>
+                        <th scope="col"><span class="visually-hidden">{{ __('common.actions') }}</span></th>
                     </tr>
                 </thead>
                 <tbody>
