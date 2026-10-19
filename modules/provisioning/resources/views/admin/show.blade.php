@@ -75,7 +75,7 @@
             <header class="ag-section__header">
                 <h3 class="ag-section__title">{{ __('provisioning::admin.actions') }}</h3>
             </header>
-            <div class="ag-section__body" style="display:flex; gap:.75rem; flex-wrap:wrap;">
+            <div class="ag-section__body ag-u-cluster">
                 @if ($usesLifecycle)
                     @if ($instance->status->value === 'failed')
                         <button type="button" class="ag-btn ag-btn--secondary" wire:click="markManualReview">

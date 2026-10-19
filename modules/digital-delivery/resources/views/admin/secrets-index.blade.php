@@ -6,7 +6,7 @@
     @endif
 
     @can('digital_delivery.manage')
-        <form wire:submit="addCodes" class="ag-form ag-section" style="margin-bottom: 1.5rem;">
+        <form wire:submit="addCodes" class="ag-form ag-section ag-u-mb-6">
             <header class="ag-section__header">
                 <h3 class="ag-section__title">{{ __('digital-delivery::admin.add') }}</h3>
                 <p class="ag-section__lede">{{ __('digital-delivery::admin.add_hint') }}</p>
@@ -41,7 +41,7 @@
         </form>
     @endcan
 
-    <section class="ag-section" style="margin-bottom: 1.5rem;">
+    <section class="ag-section ag-u-mb-6">
         <header class="ag-section__header">
             <h3 class="ag-section__title">{{ __('digital-delivery::admin.pools') }}</h3>
         </header>

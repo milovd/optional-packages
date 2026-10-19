@@ -8,7 +8,7 @@
         <p class="ag-alert ag-alert--danger" role="alert">{{ session('error') }}</p>
     @endif
 
-    <div class="ag-toolbar" style="margin-bottom: 1rem;">
+    <div class="ag-toolbar ag-u-mb-4">
         <label class="sr-only" for="domain-status">{{ __('domains::admin.filter_status') }}</label>
         <select id="domain-status" class="ag-select" wire:model.live="status">
             <option value="">{{ __('domains::admin.all_statuses') }}</option>
