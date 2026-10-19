@@ -71,7 +71,7 @@
                             <td data-label="{{ __('digital::admin.download_limit') }}">{{ $asset->download_limit ?? '∞' }}</td>
                             @can('digital.manage')
                                 <td class="ag-table__actions" data-label="{{ __('common.actions') }}">
-                                    <button type="button" class="ag-btn ag-btn--ghost" aria-label="{{ __('common.delete') }} {{ $asset->filename }}" wire:click="delete({{ $asset->id }})" wire:confirm="{{ \Illuminate\Support\Facades\Lang::has('digital::admin.delete_confirm') ? __('digital::admin.delete_confirm', ['name' => $asset->filename]) : __('common.confirm_irreversible_delete', ['name' => $asset->filename]) }}">{{ __('common.delete') }}</button>
+                                    <button type="button" class="ag-btn ag-btn--ghost" aria-label="{{ __('common.delete') }} {{ $asset->filename }}" wire:click="$wire.call('delete', {{ $asset->id }})" wire:confirm="{{ \Illuminate\Support\Facades\Lang::has('digital::admin.delete_confirm') ? __('digital::admin.delete_confirm', ['name' => $asset->filename]) : __('common.confirm_irreversible_delete', ['name' => $asset->filename]) }}">{{ __('common.delete') }}</button>
                                 </td>
                             @endcan
                         </tr>
