@@ -27,6 +27,7 @@
                         <label class="ag-field__label" for="ds-label">{{ __('digital-delivery::admin.label') }}</label>
                         <input id="ds-label" class="ag-input" type="text" wire:model="label">
                         <p class="ag-field__hint">{{ __('digital-delivery::admin.label_hint') }}</p>
+                        @error('label') <p class="ag-field__error">{{ $message }}</p> @enderror
                     </div>
                 </div>
                 <div class="ag-field">

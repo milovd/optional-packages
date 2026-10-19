@@ -23,10 +23,12 @@
                         <div class="ag-field">
                             <label class="ag-field__label" for="ev-venue">{{ __('events::admin.venue') }}</label>
                             <input id="ev-venue" class="ag-input" wire:model="venue">
+                            @error('venue') <p class="ag-field__error">{{ $message }}</p> @enderror
                         </div>
                         <div class="ag-field c-events__field--wide">
                             <label class="ag-field__label" for="ev-description">{{ __('events::admin.description') }}</label>
                             <textarea id="ev-description" class="ag-input" rows="4" wire:model="description"></textarea>
+                            @error('description') <p class="ag-field__error">{{ $message }}</p> @enderror
                         </div>
                         <div class="ag-field">
                             <label class="ag-field__label" for="ev-status">{{ __('common.status') }}</label>
@@ -69,6 +71,7 @@
                         <div class="ag-field">
                             <label class="ag-field__label" for="perf-cap">{{ __('events::admin.capacity') }}</label>
                             <input id="perf-cap" class="ag-input" type="number" min="1" wire:model.number="performance_capacity">
+                            @error('performance_capacity') <p class="ag-field__error">{{ $message }}</p> @enderror
                         </div>
                     </div>
                     <div class="c-events__actions">

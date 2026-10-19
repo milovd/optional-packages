@@ -23,6 +23,7 @@
                         <div class="ag-field">
                             <label class="ag-field__label" for="event-venue">{{ __('events::admin.venue') }}</label>
                             <input id="event-venue" class="ag-input" wire:model="venue">
+                            @error('venue') <p class="ag-field__error">{{ $message }}</p> @enderror
                         </div>
                     </div>
                     <div class="c-events__actions">
