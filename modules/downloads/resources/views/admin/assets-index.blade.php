@@ -8,6 +8,7 @@
     @can('digital.manage')
         <form wire:submit="save" class="ag-card ag-form" aria-labelledby="digital-add-heading" enctype="multipart/form-data">
             <header class="ag-card__header">
+                <x-ag.icon-tile name="upload" tone="blue" :size="16" />
                 <h2 id="digital-add-heading" class="ag-card__title">{{ __('digital::admin.add') }}</h2>
             </header>
             <div class="ag-card__content ag-grid ag-grid--2">
