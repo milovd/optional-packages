@@ -65,7 +65,7 @@
                     <div class="c-events__fields">
                         <div class="ag-field">
                             <label class="ag-field__label" for="perf-start">{{ __('events::admin.starts_at') }}</label>
-                            <input id="perf-start" class="ag-input" type="datetime-local" wire:model="performance_starts_at">
+                            <x-ag.date-input id="perf-start" class="ag-input" type="datetime-local" wire:model="performance_starts_at" />
                             @error('performance_starts_at') <p class="ag-field__error">{{ $message }}</p> @enderror
                         </div>
                         <div class="ag-field">

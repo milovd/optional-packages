@@ -33,7 +33,7 @@
             </div>
             <div class="ag-field">
                 <label class="ag-field__label" for="product-event-start">{{ __('events::admin.starts_at') }}</label>
-                <input id="product-event-start" class="ag-input" type="datetime-local" wire:model="startsAt" required>
+                <x-ag.date-input id="product-event-start" class="ag-input" type="datetime-local" wire:model="startsAt" required />
                 @error('startsAt') <p class="ag-field__error" role="alert">{{ $message }}</p> @enderror
             </div>
             <div class="ag-field">
